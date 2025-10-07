@@ -14,6 +14,7 @@ from quantium.core.dimensions import (
     L, M, T, I, THETA, N, J, DIM_0,
     dim_mul, dim_div, dim_pow
 )
+import re
 
 # ---------------------------------------------------------------------------
 # Base SI Units
@@ -32,6 +33,9 @@ candela = Unit("cd", 1.0, J)        # Luminous intensity
 # Plane angle & solid angle (dimensionless but named)
 radian = Unit("rad", 1.0, DIM_0)
 steradian = Unit("sr", 1.0, DIM_0)
+
+# Gram
+gram = Unit("g", 1e-3, M)
 
 # Frequency
 hertz = Unit("Hz", 1.0, dim_pow(T, -1))
@@ -104,6 +108,7 @@ UNIT_REGISTRY = {
     "cd": candela,
 
     # Derived units
+    "g": gram,
     "rad": radian,
     "sr": steradian,
     "Hz": hertz,
@@ -130,13 +135,127 @@ UNIT_REGISTRY = {
 # ---------------------------------------------------------------------------
 # Registry Helpers
 # ---------------------------------------------------------------------------
-def get_unit(symbol: str) -> Unit:
-    """Return the `Unit` instance corresponding to the given symbol."""
-    try:
-        return UNIT_REGISTRY[symbol]
-    except KeyError:
-        raise ValueError(f"Unknown unit symbol: {symbol}")
+PREFIXES = {
+    # Large prefixes
+    "Q": 1e30,   # quetta
+    "R": 1e27,   # ronna
+    "Y": 1e24,   # yotta
+    "Z": 1e21,   # zetta
+    "E": 1e18,   # exa
+    "P": 1e15,   # peta
+    "T": 1e12,   # tera
+    "G": 1e9,    # giga
+    "M": 1e6,    # mega
+    "k": 1e3,    # kilo
+    "h": 1e2,    # hecto
+    "da": 1e1,   # deca (note: 2 letters)
+
+    # Small prefixes
+    "d": 1e-1,   # deci
+    "c": 1e-2,   # centi
+    "m": 1e-3,   # milli
+    "µ": 1e-6,   # micro (Greek mu)
+    "n": 1e-9,   # nano
+    "p": 1e-12,  # pico
+    "f": 1e-15,  # femto
+    "a": 1e-18,  # atto
+    "z": 1e-21,  # zepto
+    "y": 1e-24,  # yocto
+    "r": 1e-27,  # ronto
+    "q": 1e-30,  # quecto
+}
+
+# ---------------------------------------------------------------------------
+# Prefix Utilities
+# ---------------------------------------------------------------------------
 
 def register_unit(unit: Unit) -> None:
     """Add a new `Unit` instance to the registry."""
     UNIT_REGISTRY[unit.name] = unit
+
+
+def _normalize_symbol(s: str) -> str:
+    """
+    Normalize common ASCII variants in unit symbols:
+      - Leading 'u' → 'µ' (treat as micro prefix)
+      - Any 'ohm' (case-insensitive) → 'Ω'
+    """
+    if s.startswith("u"):           # don't consult PREFIXES; accept ASCII 'u' as micro alias
+        s = "µ" + s[1:]
+
+    # Replace all 'ohm' substrings, case-insensitive
+    s = re.sub(r"(?i)ohm", "Ω", s)
+    return s
+
+_PREFIXES_BY_LEN_DESC = tuple(sorted(PREFIXES.keys(), key=len, reverse=True))
+
+def _split_prefix(symbol: str):
+    for p in _PREFIXES_BY_LEN_DESC:
+        if symbol.startswith(p):
+            return p, symbol[len(p):]
+    return None, symbol
+
+
+def _is_prefixed_symbol(sym: str) -> bool:
+    """
+    Return True if `sym` looks like a prefixed unit we could support:
+    i.e., starts with a valid prefix and the rest exists in UNIT_REGISTRY.
+    """
+    p, rest = _split_prefix(sym)
+    return p is not None and rest in UNIT_REGISTRY
+
+
+def _prefix_add(symbol: str) -> bool:
+    """
+    Try to add a prefixed unit named `symbol` to UNIT_REGISTRY.
+
+    Rules:
+    - `symbol` must begin with a known SI prefix from PREFIXES.
+    - The remainder (base symbol) must already exist in UNIT_REGISTRY.
+    - Do NOT allow stacking prefixes (e.g., 'k' + 'um' -> reject).
+    - If `symbol` already exists, do nothing and return False.
+
+    Returns:
+        True if a new unit was created and added; False otherwise.
+    """
+
+    symbol = _normalize_symbol(symbol)
+    
+    # Already present? Nothing to do.
+    if symbol in UNIT_REGISTRY:
+        return False
+
+    # Split into prefix and base part
+    prefix, base_sym = _split_prefix(symbol)
+    if prefix is None or not base_sym:
+        return False  # no valid prefix or empty base
+
+    # Base must exist
+    base_unit = UNIT_REGISTRY.get(base_sym)
+    if base_unit is None:
+        return False
+
+    # Prevent stacking: if the base itself looks prefixed, reject
+    if _is_prefixed_symbol(base_sym):
+        return False
+
+    # Create and register the new prefixed unit via helper
+    scale = PREFIXES[prefix]
+    new_unit = Unit(symbol, base_unit.factor * scale, base_unit.dim)
+    register_unit(new_unit)
+    return True
+
+def get_unit(symbol: str) -> Unit:
+    """Return the Unit for `symbol`, generating a prefixed unit on the fly if needed."""
+    # Fast path: already known
+    symbol = _normalize_symbol(symbol)
+    unit = UNIT_REGISTRY.get(symbol)
+    if unit is not None:
+        return unit
+
+    # Try to synthesize a prefixed unit (no-op if invalid or stacked)
+    if _prefix_add(symbol):
+        return UNIT_REGISTRY[symbol]
+
+    raise ValueError(f"Unknown unit symbol: {symbol}")
+
