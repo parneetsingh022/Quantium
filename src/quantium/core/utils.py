@@ -20,7 +20,7 @@ format_dim(dim: Dim) -> str
 
 """
 
-from quantium.units.dimensions import Dim
+from quantium.core.dimensions import Dim
 
 _SUPERSCRIPTS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
 def _sup(n: int) -> str:
