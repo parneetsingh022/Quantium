@@ -241,7 +241,7 @@ def _prefix_add(symbol: str) -> bool:
 
     # Create and register the new prefixed unit via helper
     scale = PREFIXES[prefix]
-    new_unit = Unit(symbol, base_unit.factor * scale, base_unit.dim)
+    new_unit = Unit(symbol, base_unit.scale_to_si * scale, base_unit.dim)
     register_unit(new_unit)
     return True
 
