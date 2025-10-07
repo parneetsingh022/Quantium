@@ -1,0 +1,14 @@
+site_name: Quantium
+repo_url: https://github.com/parneetsingh022/quantium 
+nav:
+  - Home: index.md            
+theme:
+  name: material
+  logo: images/quantium_logo.png
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - codehilite
+  - pymdownx.details
+  - pymdownx.superfences
