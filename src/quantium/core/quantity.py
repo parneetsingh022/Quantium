@@ -23,7 +23,7 @@ The system supports:
 from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
-from quantium.core.dimensions import Dim, dim_div, dim_mul, dim_pow
+from quantium.core.dimensions import Dim, dim_div, dim_mul, dim_pow, DIM_0
 from quantium.core.utils import format_dim
 
 @dataclass(frozen=True, slots=True)
@@ -97,22 +97,56 @@ class Quantity:
             raise TypeError("Sub requires same dimensions")
         return Quantity((self._mag_si - other._mag_si)/self.unit.scale_to_si, self.unit)
     
-    def __mul__(self, other: "Quantity") -> "Quantity":
+    def __mul__(self, other: "Quantity | float | int") -> "Quantity":
+        # scalar × quantity
+        if isinstance(other, (int, float)):
+            return Quantity((self._mag_si * float(other)) / self.unit.scale_to_si, self.unit)
+
+        # quantity × quantity
         new_dim = dim_mul(self.dim, other.dim)
-        name = format_dim(new_dim)
-        return Quantity(self._mag_si * other._mag_si, Unit(name, 1.0, new_dim))
-    
-    def __truediv__(self, other: "Quantity") -> "Quantity":
+        # compose unit name and scale
+        new_unit_name = f"{self.unit.name}·{other.unit.name}"
+        new_scale = self.unit.scale_to_si * other.unit.scale_to_si
+        new_unit = Unit(new_unit_name, new_scale, new_dim)
+        # convert SI magnitude back to the composed unit
+        return Quantity((self._mag_si * other._mag_si) / new_unit.scale_to_si, new_unit)
+
+    def __rmul__(self, other: float | int) -> "Quantity":
+        # allows 3 * (2 m) -> 6 m
+        return self.__mul__(other)
+
+    def __truediv__(self, other: "Quantity | float | int") -> "Quantity":
+        # quantity / scalar
+        if isinstance(other, (int, float)):
+            return Quantity((self._mag_si / float(other)) / self.unit.scale_to_si, self.unit)
+
+        # quantity / quantity
         new_dim = dim_div(self.dim, other.dim)
-        name = format_dim(new_dim)
-        return Quantity(self._mag_si / other._mag_si, Unit(name, 1.0, new_dim))
+        new_unit_name = f"{self.unit.name}/{other.unit.name}"
+        new_scale = self.unit.scale_to_si / other.unit.scale_to_si
+        new_unit = Unit(new_unit_name, new_scale, new_dim)
+        return Quantity((self._mag_si / other._mag_si) / new_unit.scale_to_si, new_unit)
+
+    def __rtruediv__(self, other: float | int) -> "Quantity":
+        # scalar / quantity  -> returns Quantity with inverse dimension
+        if not isinstance(other, (int, float)):
+            return NotImplemented
+        new_dim = dim_div(DIM_0, self.dim)  # or dim_pow(self.dim, -1)
+        new_unit_name = f"{1}/{self.unit.name}"
+        new_scale = 1.0 / self.unit.scale_to_si
+        new_unit = Unit(new_unit_name, new_scale, new_dim)
+        return Quantity((float(other) / self._mag_si) / new_unit.scale_to_si, new_unit)
+
+    def __pow__(self, n: int) -> "Quantity":
+        new_dim = dim_pow(self.dim, n)
+        new_unit_name = f"{self.unit.name}^{n}"
+        new_scale = self.unit.scale_to_si ** n
+        new_unit = Unit(new_unit_name, new_scale, new_dim)
+        return Quantity((self._mag_si ** n) / new_unit.scale_to_si, new_unit)
     
-    def __pow__(self, n: int) -> Quantity:
-        return Quantity(self._mag_si**n, Unit(f"{self.unit.name}^{n}", 1.0, dim_pow(self.dim, n)))
-    
-    def __repr__(self) -> str:
+    def __repr__(self) -> str: 
         return f"{self._mag_si/self.unit.scale_to_si:g} {self.unit.name}"
-    
+        
 
         
 
