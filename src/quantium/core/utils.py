@@ -1,4 +1,25 @@
-# quantium/units/utils.py
+"""
+quantium.units.utils
+====================
+
+Utility functions for formatting and displaying physical dimensions and units
+within the Quantium framework.
+
+This module provides helper functions for representing dimensional exponents
+and unit strings in a readable scientific format (e.g., 'kg·m/s²').
+
+Functions
+---------
+_sup(n: int) -> str
+    Converts an integer exponent into its Unicode superscript representation.
+    Used for displaying powers in formatted unit strings (e.g., 'm²' or 's⁻¹').
+
+format_dim(dim: Dim) -> str
+    Converts a dimension tuple `(L, M, T, I, Θ, N, J)` into a conventional
+    formatted string like `'kg·m/s²'`, following standard SI notation.
+
+"""
+
 from quantium.units.dimensions import Dim
 
 _SUPERSCRIPTS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
