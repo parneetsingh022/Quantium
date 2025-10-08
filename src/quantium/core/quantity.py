@@ -87,6 +87,12 @@ class Quantity:
         if new_unit.dim != self.dim:
             raise TypeError("Dimension mismatch in conversion")
         return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
+    
+    def to_si(self) -> "Quantity":
+        si_name = format_dim(self.dim)
+        si_unit = Unit(si_name, 1.0, self.dim)
+        
+        return Quantity(self._mag_si, si_unit)
 
     # arithmetic
     def __add__(self, other: Quantity) -> Quantity:
