@@ -89,9 +89,33 @@ class Quantity:
         return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
     
     def to_si(self) -> "Quantity":
-        si_name = format_dim(self.dim)
+        """
+        Return an equivalent Quantity expressed in SI with a preferred symbol when possible.
+        Examples:
+        (C/s)  -> A
+        (kg·m/s²) -> N
+        (J/s)  -> W
+        (1/s)  -> Hz
+        (cm)   -> m
+        """
+        # Local imports avoid circular import at module load time.
+        from quantium.core.utils import format_dim, preferred_symbol_for_dim
+
+        # 1) Try a preferred named SI unit for this dimension (A, N, W, Pa, …)
+        sym = preferred_symbol_for_dim(self.dim)  # returns e.g. "A", "N", "W", or None
+        if sym:
+            # Use the registry instance if you want (optional)
+            try:
+                from quantium.units.units_registry import get_unit
+                si_unit = get_unit(sym)            # should have scale_to_si == 1.0
+            except Exception:
+                # Fallback if you want to avoid importing the registry here
+                si_unit = Unit(sym, 1.0, self.dim)
+            return Quantity(self._mag_si, si_unit) # _mag_si is already in SI
+
+        # 2) Fall back to composed base-SI name for this dimension
+        si_name = format_dim(self.dim)             # e.g., "kg·m/s²", "m", "1"
         si_unit = Unit(si_name, 1.0, self.dim)
-        
         return Quantity(self._mag_si, si_unit)
 
     # arithmetic
@@ -154,11 +178,23 @@ class Quantity:
         return Quantity((self._mag_si ** n) / new_unit.scale_to_si, new_unit)
     
     def __repr__(self) -> str:
-        # local import to avoid circular deps; module is cached after first import
-        from quantium.core.utils import prettify_unit_name_supers
+        # Local imports avoid cyclic imports; modules are cached after the first time.
+        from quantium.core.utils import prettify_unit_name_supers, preferred_symbol_for_dim
 
-        mag = self._mag_si / self.unit.scale_to_si          # keep value in current unit
-        pretty = prettify_unit_name_supers(self.unit.name)  # keep symbols as written
+        # Always compute magnitude in the unit currently stored on the object
+        mag = self._mag_si / self.unit.scale_to_si
+
+        # Start from the user’s unit name (keeps cm/ms etc.), with superscripts and cancellation
+        pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
+
+        # If this quantity’s *current unit* is exactly SI-scaled (factor 1),
+        # upgrade to a preferred *named* unit for this dimension (A, N, J, W, Pa, Hz, …)
+        # This turns 'C/s' -> 'A', 'kg·m/s²' -> 'N', 'J/s' -> 'W', etc.
+        if self.unit.scale_to_si == 1.0:
+            sym = preferred_symbol_for_dim(self.dim)
+            if sym:
+                pretty = sym  # symbol only; mag stays the same because factor is 1.0
+
         return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
         
 

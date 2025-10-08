@@ -23,7 +23,7 @@ format_dim(dim: Dim) -> str
 from quantium.core.dimensions import Dim
 # --- superscript + name-based prettifier (keeps units as written) ---
 import re
-from typing import Dict
+from typing import Dict, Optional
 
 _SUPERSCRIPTS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
 
@@ -146,3 +146,39 @@ def format_dim(dim) -> str:
     numerator   = "·".join(num) if num else "1"
     denominator = "·".join(den)
     return f"{numerator}/{denominator}" if denominator else numerator
+
+
+def _dim_key(dim) -> tuple:
+    return tuple(dim)
+
+_PREFERRED_ORDER = [
+    "A", "C", "N", "Pa", "J", "W", "V", "Ω", "S", "F", "Wb", "T", "H",
+    "Hz", "lm", "lx", "Bq", "Gy", "Sv", "kat",
+    "rad", "sr",
+    "m", "kg", "s", "K", "mol", "cd",
+]
+
+# Build lazily (no import at module load)
+_PREFERRED_BY_DIM = None
+
+def _build_pref_map():
+    # Local import avoids circular import at module import time
+    from quantium.units.units_registry import UNIT_REGISTRY
+    pref = {}
+    for sym in _PREFERRED_ORDER:
+        u = UNIT_REGISTRY.get(sym)
+        if u and getattr(u, "scale_to_si", None) == 1.0:
+            pref[_dim_key(u.dim)] = sym
+    return pref
+
+def preferred_symbol_for_dim(dim) -> Optional[str]:
+    """Return the preferred symbol (e.g., 'A', 'N', 'W') for a dimension, or None."""
+    global _PREFERRED_BY_DIM
+    if _PREFERRED_BY_DIM is None:
+        _PREFERRED_BY_DIM = _build_pref_map()
+    return _PREFERRED_BY_DIM.get(_dim_key(dim))
+
+# Optional helper if you ever want to refresh after registering new units:
+def invalidate_preferred_cache() -> None:
+    global _PREFERRED_BY_DIM
+    _PREFERRED_BY_DIM = None
