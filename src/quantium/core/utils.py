@@ -56,36 +56,46 @@ def _parse_exponent(m: re.Match) -> int:
     return 1
 
 def _tokenize_name_merge(name: str) -> Dict[str, int]:
-    """Merge exponents from a composed unit name; cancel identical symbols."""
+    """Merge exponents from a composed unit name; cancel identical symbols.
+
+    Correctly handles sequences like 'cm/ms^3·ms' as (cm / ms^3) · ms.
+    """
     if not name or name == "1":
         return {}
 
-    # normalize ASCII separators
+    # Normalize ASCII separators
     name = name.replace("*", "·")
 
     parts = re.split(r"([·/])", name)  # keep separators
-    sign = +1
+    op = "·"                           # last operator seen; '·' or '/'
     exps: Dict[str, int] = {}
 
     for tok in parts:
-        if not tok or tok == "·":
+        if not tok:
             continue
-        if tok == "/":
-            sign = -1
+        if tok in ("·", "/"):
+            op = tok
             continue
         if tok == "1":
+            op = "·"
             continue
 
         m = _TOKEN_RE.fullmatch(tok)
-        if not m:
-            # treat as plain symbol if it doesn't match pattern
-            sym, e = tok, 1
+        if m:
+            sym = m.group("sym")
+            e = _parse_exponent(m)
         else:
-            sym, e = m.group("sym"), _parse_exponent(m)
+            sym, e = tok, 1
 
-        exps[sym] = exps.get(sym, 0) + sign * e
+        # Apply operator to THIS token only
+        if op == "/":
+            e = -e
+        exps[sym] = exps.get(sym, 0) + e
 
-    # drop zero exponents
+        # Reset to multiply for the next token
+        op = "·"
+
+    # Drop zeros
     return {k: v for k, v in exps.items() if v != 0}
 
 def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
