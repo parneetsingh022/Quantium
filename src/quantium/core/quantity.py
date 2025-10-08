@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from math import isfinite
 from quantium.core.dimensions import Dim, dim_div, dim_mul, dim_pow, DIM_0
 from quantium.core.utils import format_dim
+import re
+
 
 @dataclass(frozen=True, slots=True)
 class Unit:
@@ -79,6 +81,7 @@ class Quantity:
         self._mag_si = float(value) * unit.scale_to_si
         self.dim = unit.dim
         self.unit = unit
+        
 
     def to(self, new_unit: Unit) -> Quantity:
         if new_unit.dim != self.dim:
@@ -144,8 +147,13 @@ class Quantity:
         new_unit = Unit(new_unit_name, new_scale, new_dim)
         return Quantity((self._mag_si ** n) / new_unit.scale_to_si, new_unit)
     
-    def __repr__(self) -> str: 
-        return f"{self._mag_si/self.unit.scale_to_si:g} {self.unit.name}"
+    def __repr__(self) -> str:
+        # local import to avoid circular deps; module is cached after first import
+        from quantium.core.utils import prettify_unit_name_supers
+
+        mag = self._mag_si / self.unit.scale_to_si          # keep value in current unit
+        pretty = prettify_unit_name_supers(self.unit.name)  # keep symbols as written
+        return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
         
 
         
