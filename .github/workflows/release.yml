@@ -1,0 +1,121 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"   # Only vA.B.C tags (e.g., v1.2.3)
+
+concurrency:
+  group: pypi-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write   # required for PyPI Trusted Publishing
+
+    env:
+      PYTHON_VERSION: "3.11"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive tag and version
+        id: tag
+        run: |
+          TAG_REF="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG_REF" >> "$GITHUB_OUTPUT"
+
+          # Enforce strict vA.B.C format
+          if [[ ! "$TAG_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: tag '$TAG_REF' does not match ^vA.B.C$ (e.g., v1.2.3)."
+            exit 1
+          fi
+
+          VERSION="${TAG_REF#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build packaging tomli tomllib || true
+          # tomllib is stdlib on 3.11+; tomli covers older parsing if needed for tooling
+
+      - name: Resolve project version and verify tag match
+        run: |
+          python - << 'PY'
+          import sys, json, pathlib
+          from packaging.version import Version
+          pyproject = pathlib.Path("pyproject.toml")
+          if not pyproject.exists():
+            print("Error: pyproject.toml not found", file=sys.stderr)
+            sys.exit(1)
+
+          # Try tomllib (3.11+) then tomli
+          try:
+            import tomllib as toml
+          except Exception:
+            import tomli as toml
+
+          data = toml.loads(pyproject.read_text())
+
+          project = data.get("project", {})
+          dynamic = set(map(str.lower, project.get("dynamic", [])))
+          declared_version = project.get("version")
+
+          def scm_version():
+            # Attempt to compute version via setuptools_scm if dynamic
+            try:
+              import subprocess, sys
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools_scm"], stdout=subprocess.DEVNULL)
+              out = subprocess.check_output([sys.executable, "-m", "setuptools_scm"], text=True).strip()
+              return out
+            except Exception as e:
+              print(f"Error computing setuptools_scm version: {e}", file=sys.stderr)
+              sys.exit(1)
+
+          if declared_version:
+            project_version = declared_version
+          elif "version" in dynamic:
+            project_version = scm_version()
+          else:
+            print("Error: No 'project.version' and not dynamic; cannot determine version.", file=sys.stderr)
+            sys.exit(1)
+
+          tag_version = "${{ steps.tag.outputs.version }}"
+          try:
+            if Version(project_version) != Version(tag_version):
+              print(f"Error: Tag version ({tag_version}) != project version ({project_version})", file=sys.stderr)
+              sys.exit(1)
+          except Exception:
+            # Fallback to string compare if not PEP 440 parseable
+            if project_version != tag_version:
+              print(f"Error: Tag version ({tag_version}) != project version ({project_version})", file=sys.stderr)
+              sys.exit(1)
+
+          print(f"Verified: tag v{tag_version} matches project version {project_version}")
+          PY
+
+      - name: Build distributions
+        run: |
+          python -m build
+          ls -lh dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Trusted Publishing via OIDC (no token needed when configured on PyPI)
+          skip-existing: true
+          # Optional hardening; uncomment if you want SLSA provenance & hash prints:
+          # provenance: true
+          # print-hash: true
