@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   release:
+    environment: release
     name: release
     runs-on: ubuntu-latest
 
