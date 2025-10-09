@@ -26,20 +26,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Derive tag and version
+       - name: Derive tag and version (supports pre/post/dev)
         id: tag
+        shell: bash
         run: |
+          set -euo pipefail
           TAG_REF="${GITHUB_REF#refs/tags/}"
           echo "tag=$TAG_REF" >> "$GITHUB_OUTPUT"
 
-          # Enforce strict vA.B.C format
-          if [[ ! "$TAG_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Error: tag '$TAG_REF' does not match ^vA.B.C$ (e.g., v1.2.3)."
+          # Accept: vX.Y.Z with optional PEP 440 suffixes:
+          # vX.Y.Z[aN|bN|rcN][.postN][.devN]
+          # Examples: v0.0.1, v0.0.1a0, v1.2.3rc1, v1.2.3.post1, v1.2.3rc1.post1.dev2
+          if [[ "$TAG_REF" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)((a|b|rc)[0-9]+)?(\.post[0-9]+)?(\.dev[0-9]+)?$ ]]; then
+            CORE="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            PRE="${BASH_REMATCH[4]}"
+            POST="${BASH_REMATCH[6]}"
+            DEV="${BASH_REMATCH[7]}"
+            VERSION="${CORE}${PRE}${POST}${DEV}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "✅ Accepted tag '$TAG_REF' → version '$VERSION'"
+          else
+            echo "❌ Tag '$TAG_REF' is not a valid release tag."
+            echo "   Use vX.Y.Z or vX.Y.ZaN/bN/rcN[.postN][.devN] (e.g., v0.0.1, v0.0.1a0)."
             exit 1
           fi
-
-          VERSION="${TAG_REF#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v5
