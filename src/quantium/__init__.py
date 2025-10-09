@@ -7,7 +7,7 @@ units, ensuring robust and expressive modeling across scientific and engineering
 
 from quantium.units.units_registry import get_unit
 
-__version__ = "0.0.1"
+__version__ = "0.0.1a0"
 __author__ = "Parneet Sidhu"
 __license__ = "MIT"
 
