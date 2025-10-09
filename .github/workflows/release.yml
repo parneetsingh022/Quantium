@@ -3,8 +3,8 @@ name: release
 on:
   push:
     tags:
-      - "v[0-9]*.[0-9]*.[0-9]*"      # plain vX.Y.Z
-      - "v[0-9]*.[0-9]*.[0-9]*.*"    # allow possible suffixes like a0, rc1, .post1, .dev2
+      - "v[0-9]*.[0-9]*.[0-9]*"    # plain vX.Y.Z
+      - "v[0-9]*.[0-9]*.[0-9]*.*"  # allow suffixes like a0/b1/rc1/.postN/.devN
 
 concurrency:
   group: pypi-publish-${{ github.ref }}
@@ -25,8 +25,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # helpful for version tools like setuptools_scm
 
-       - name: Derive tag and version (supports pre/post/dev)
+      - name: Derive tag and version (supports pre/post/dev)
         id: tag
         shell: bash
         run: |
@@ -65,8 +67,10 @@ jobs:
       - name: Resolve project version and verify tag match
         run: |
           python - << 'PY'
-          import sys, json, pathlib
+          import sys, pathlib
           from packaging.version import Version
+
+          tag_version = "${{ steps.tag.outputs.version }}"
           pyproject = pathlib.Path("pyproject.toml")
           if not pyproject.exists():
             print("Error: pyproject.toml not found", file=sys.stderr)
@@ -79,21 +83,15 @@ jobs:
             import tomli as toml
 
           data = toml.loads(pyproject.read_text())
-
           project = data.get("project", {})
           dynamic = set(map(str.lower, project.get("dynamic", [])))
           declared_version = project.get("version")
 
           def scm_version():
-            # Attempt to compute version via setuptools_scm if dynamic
-            try:
-              import subprocess, sys
-              subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools_scm"], stdout=subprocess.DEVNULL)
-              out = subprocess.check_output([sys.executable, "-m", "setuptools_scm"], text=True).strip()
-              return out
-            except Exception as e:
-              print(f"Error computing setuptools_scm version: {e}", file=sys.stderr)
-              sys.exit(1)
+            import subprocess, sys
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools_scm"], stdout=subprocess.DEVNULL)
+            out = subprocess.check_output([sys.executable, "-m", "setuptools_scm"], text=True).strip()
+            return out
 
           if declared_version:
             project_version = declared_version
@@ -103,18 +101,16 @@ jobs:
             print("Error: No 'project.version' and not dynamic; cannot determine version.", file=sys.stderr)
             sys.exit(1)
 
-          tag_version = "${{ steps.tag.outputs.version }}"
           try:
             if Version(project_version) != Version(tag_version):
               print(f"Error: Tag version ({tag_version}) != project version ({project_version})", file=sys.stderr)
               sys.exit(1)
           except Exception:
-            # Fallback to string compare if not PEP 440 parseable
             if project_version != tag_version:
               print(f"Error: Tag version ({tag_version}) != project version ({project_version})", file=sys.stderr)
               sys.exit(1)
 
-          print(f"Verified: tag v{tag_version} matches project version {project_version}")
+          print(f"Verified: v{tag_version} == {project_version}")
           PY
 
       - name: Build distributions
@@ -125,8 +121,7 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # Trusted Publishing via OIDC (no token needed when configured on PyPI)
+          # Uses OIDC Trusted Publishing if configured on PyPI
           skip-existing: true
-          # Optional hardening; uncomment if you want SLSA provenance & hash prints:
           # provenance: true
           # print-hash: true
