@@ -1,5 +1,5 @@
 """
-quantium.units.utils
+quantium.core.utils
 ====================
 
 Utility functions for formatting and displaying physical dimensions and units
