@@ -3,8 +3,8 @@ name: release
 on:
   push:
     tags:
-      - "v[0-9]*.[0-9]*.[0-9]*"    # plain vX.Y.Z
-      - "v[0-9]*.[0-9]*.[0-9]*.*"  # allow a0/bN/rcN/.postN/.devN
+      - "v[0-9]*.[0-9]*.[0-9]*"    # vX.Y.Z
+      - "v[0-9]*.[0-9]*.[0-9]*.*"  # vX.Y.ZaN / rcN / .postN / .devN
 
 concurrency:
   group: pypi-publish-${{ github.ref }}
@@ -17,7 +17,7 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write   # for PyPI Trusted Publishing
+      id-token: write   # Required for PyPI Trusted Publishing
 
     env:
       PYTHON_VERSION: "3.11"
@@ -37,6 +37,7 @@ jobs:
           echo "tag=$TAG_REF" >> "$GITHUB_OUTPUT"
 
           # Accept vX.Y.Z[aN|bN|rcN][.postN][.devN]
+          # Examples: v0.0.1, v0.0.1a0, v1.2.3rc1, v1.2.3.post1, v1.2.3rc1.post1.dev2
           if [[ "$TAG_REF" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)((a|b|rc)[0-9]+)?(\.post[0-9]+)?(\.dev[0-9]+)?$ ]]; then
             CORE="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
             PRE="${BASH_REMATCH[4]}"
@@ -56,17 +57,26 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install build tooling
+      - name: Install build tooling (strict)
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install build tomli tomllib || true
+          python -m pip install --upgrade build setuptools wheel
+          # Quick sanity check that modules are importable
+          python - <<'PY'
+          import importlib
+          for m in ("build","setuptools","wheel"):
+              importlib.import_module(m)
+          print("build tooling present")
+          PY
 
       - name: Resolve project version and verify tag match
         run: |
+          set -euo pipefail
           python - << 'PY'
           import sys, pathlib, subprocess
 
-          # Ensure required libs inside this very interpreter (robust against earlier step issues)
+          # Ensure packaging is available here
           try:
               from packaging.version import Version
           except Exception:
@@ -79,7 +89,7 @@ jobs:
               print("Error: pyproject.toml not found", file=sys.stderr)
               sys.exit(1)
 
-          # tomllib (3.11+) else tomli
+          # tomllib on 3.11+, else tomli (install if missing)
           try:
               import tomllib as toml
           except Exception:
@@ -131,6 +141,6 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          skip-existing: true   # uses OIDC if configured on PyPI
+          skip-existing: true   # Uses OIDC Trusted Publishing if configured on PyPI
           # provenance: true
           # print-hash: true
