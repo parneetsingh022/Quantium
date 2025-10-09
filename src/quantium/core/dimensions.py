@@ -1,5 +1,5 @@
 """
-quantium.units.dimensions
+quantium.core.dimensions
 =========================
 
 Core representation and algebra for **physical dimensions** used throughout
