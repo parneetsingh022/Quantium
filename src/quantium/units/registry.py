@@ -244,7 +244,7 @@ def _bootstrap_default_registry() -> UnitsRegistry:
         ("C", 1.0, dim_mul(I, T)),
         ("V", 1.0, dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I)),
         ("F", 1.0, dim_div(dim_mul(I, T), dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I))),
-        ("Ω", 1.0, dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I) ),
+        ("Ω", 1.0, dim_div(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), I)),
         ("S", 1.0, dim_div(I, dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I))),
         ("Wb", 1.0, dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T)),
         ("T", 1.0, dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), dim_pow(L, 2))),
