@@ -14,7 +14,7 @@ import pytest
 
 from quantium.core.quantity import Unit
 from quantium.core.dimensions import (
-    L, M, T, I, THETA, N, J, DIM_0,
+    LENGTH, MASS, TIME, CURRENT, TEMPERATURE, AMOUNT, LUMINOUS, DIM_0,
     dim_mul, dim_div, dim_pow,
 )
 
@@ -47,7 +47,7 @@ def patched_default(monkeypatch, reg):
 # ---------------------------------------------------------------------------
 
 def test_base_units_present(reg):
-    for sym, dim in [("m", L), ("kg", M), ("s", T), ("A", I), ("K", THETA), ("mol", N), ("cd", J)]:
+    for sym, dim in [("m", LENGTH), ("kg", MASS), ("s", TIME), ("A", CURRENT), ("K", TEMPERATURE), ("mol", AMOUNT), ("cd", LUMINOUS)]:
         u = reg.get(sym)
         assert isinstance(u, Unit)
         assert u.name == sym
@@ -61,32 +61,32 @@ def test_common_derived_units_present(reg):
     assert reg.get("sr").dim == DIM_0
 
     Hz = reg.get("Hz")
-    assert Hz.dim == dim_pow(T, -1)
+    assert Hz.dim == dim_pow(TIME, -1)
     assert Hz.scale_to_si == pytest.approx(1.0)
 
     N_unit = reg.get("N")
-    assert N_unit.dim == dim_mul(M, dim_div(L, dim_pow(T, 2)))  # kg·m/s²
+    assert N_unit.dim == dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2)))  # kg·m/s²
 
     Pa = reg.get("Pa")
-    assert Pa.dim == dim_div(N_unit.dim, dim_pow(L, 2))
+    assert Pa.dim == dim_div(N_unit.dim, dim_pow(LENGTH, 2))
 
     J_unit = reg.get("J")
-    assert J_unit.dim == dim_mul(N_unit.dim, L)
+    assert J_unit.dim == dim_mul(N_unit.dim, LENGTH)
 
     W = reg.get("W")
-    assert W.dim == dim_div(J_unit.dim, T)
+    assert W.dim == dim_div(J_unit.dim, TIME)
 
     V = reg.get("V")
-    assert V.dim == dim_div(W.dim, I)
+    assert V.dim == dim_div(W.dim, CURRENT)
 
     F = reg.get("F")
     assert F.dim == dim_div(reg.get("C").dim, V.dim)
 
     ohm = reg.get("Ω")
-    assert ohm.dim == dim_div(V.dim, I)
+    assert ohm.dim == dim_div(V.dim, CURRENT)
 
     S = reg.get("S")
-    assert S.dim == dim_div(I, V.dim)
+    assert S.dim == dim_div(CURRENT, V.dim)
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ def test_thread_safe_prefixed_creation(reg):
 
 def test_convenience_functions_use_default_registry(patched_default):
     # register a custom unit through the free function and fetch it back
-    regmod.register_unit(Unit("ft", 0.3048, L))
+    regmod.register_unit(Unit("ft", 0.3048, LENGTH))
     out = regmod.get_unit("ft")
     assert out.name == "ft"
     assert out.scale_to_si == pytest.approx(0.3048)
@@ -220,7 +220,7 @@ def test_convenience_functions_use_default_registry(patched_default):
 # ---------------------------------------------------------------------------
 
 def test_dimension_relationships(reg):
-    # N = kg·m/s², J = N·m, W = J/s, V = W/A, Ω = V/A, S = A/V
+    # AMOUNT = kg·m/s², LUMINOUS = N·m, W = LUMINOUS/s, V = W/A, Ω = V/A, S = A/V
     kg = reg.get("kg").dim
     m = reg.get("m").dim
     s = reg.get("s").dim
@@ -248,39 +248,39 @@ def test_dimension_relationships(reg):
 
 @pytest.mark.parametrize("sym, dim_expr, scale", [
     # frequency & mechanics
-    ("Hz", dim_pow(T, -1), 1.0),
-    ("N",  dim_mul(M, dim_div(L, dim_pow(T, 2))), 1.0),
-    ("Pa", dim_div(dim_mul(M, dim_div(L, dim_pow(T, 2))), dim_pow(L, 2)), 1.0),
-    ("J",  dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), 1.0),
-    ("W",  dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), 1.0),
+    ("Hz", dim_pow(TIME, -1), 1.0),
+    ("N",  dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), 1.0),
+    ("Pa", dim_div(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), dim_pow(LENGTH, 2)), 1.0),
+    ("J",  dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), 1.0),
+    ("W",  dim_div(dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), TIME), 1.0),
 
     # electricity
-    ("C",  dim_mul(I, T), 1.0),
-    ("V",  dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), 1.0),
-    ("F",  dim_div(dim_mul(I, T), dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I)), 1.0),
+    ("C",  dim_mul(CURRENT, TIME), 1.0),
+    ("V",  dim_div(dim_div(dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), TIME), CURRENT), 1.0),
+    ("F",  dim_div(dim_mul(CURRENT, TIME), dim_div(dim_div(dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), TIME), CURRENT)), 1.0),
     ("Ω",  dim_div(  # V / A
-            dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), I), 1.0),
-    ("S",  dim_div(I, dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I)), 1.0),
-    ("Wb", dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), 1.0),
-    ("T",  dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), dim_pow(L, 2)), 1.0),
-    ("H",  dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), I), 1.0),
+            dim_div(dim_div(dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), TIME), CURRENT), CURRENT), 1.0),
+    ("S",  dim_div(CURRENT, dim_div(dim_div(dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), TIME), CURRENT)), 1.0),
+    ("Wb", dim_mul(dim_div(dim_div(dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), TIME), CURRENT), TIME), 1.0),
+    ("T",  dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), TIME), CURRENT), TIME), dim_pow(LENGTH, 2)), 1.0),
+    ("H",  dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), TIME), CURRENT), TIME), CURRENT), 1.0),
 
     # photometry (sr is DIM_0 so lm = cd)
-    ("lm", dim_mul(J, DIM_0), 1.0),
-    ("lx", dim_div(dim_mul(J, DIM_0), dim_pow(L, 2)), 1.0),
+    ("lm", dim_mul(LUMINOUS, DIM_0), 1.0),
+    ("lx", dim_div(dim_mul(LUMINOUS, DIM_0), dim_pow(LENGTH, 2)), 1.0),
 
     # radioactivity & dose
-    ("Bq", dim_pow(T, -1), 1.0),
-    ("Gy", dim_div(  # J/kg
-            dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), M), 1.0),
+    ("Bq", dim_pow(TIME, -1), 1.0),
+    ("Gy", dim_div(  # LUMINOUS/kg
+            dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), MASS), 1.0),
     ("Sv", dim_div(  # same as Gy
-            dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), M), 1.0),
+            dim_mul(dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2))), LENGTH), MASS), 1.0),
 
     # catalytic activity
-    ("kat", dim_div(N, T), 1.0),
+    ("kat", dim_div(AMOUNT, TIME), 1.0),
 
     # mass non-SI base
-    ("g",  M, 1e-3),
+    ("g",  MASS, 1e-3),
 ])
 def test_all_derived_units_dimensions_and_scales(reg, sym, dim_expr, scale):
     u = reg.get(sym)

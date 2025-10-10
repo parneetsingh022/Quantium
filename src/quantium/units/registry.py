@@ -29,7 +29,7 @@ from typing import Dict, Iterable, Mapping, Optional, Tuple
 
 from quantium.core.quantity import Unit
 from quantium.core.dimensions import (
-    L, M, T, I, THETA, N, J, DIM_0,
+    LENGTH, MASS, TIME, CURRENT, TEMPERATURE, AMOUNT, LUMINOUS,DIM_0,
     dim_mul, dim_div, dim_pow,
 )
 
@@ -217,44 +217,62 @@ def _bootstrap_default_registry() -> UnitsRegistry:
 
     # Base SI units
     base_units = (
-        Unit("m", 1.0, L),           # length
-        Unit("kg", 1.0, M),          # mass
-        Unit("s", 1.0, T),           # time
-        Unit("A", 1.0, I),           # electric current
-        Unit("K", 1.0, THETA),       # temperature
-        Unit("mol", 1.0, N),         # amount of substance
-        Unit("cd", 1.0, J),          # luminous intensity
+        Unit("m",   1.0, LENGTH),       # length
+        Unit("kg",  1.0, MASS),         # mass
+        Unit("s",   1.0, TIME),         # time
+        Unit("A",   1.0, CURRENT),      # electric current
+        Unit("K",   1.0, TEMPERATURE),  # temperature
+        Unit("mol", 1.0, AMOUNT),       # amount of substance
+        Unit("cd",  1.0, LUMINOUS),     # luminous intensity
     )
 
     # Named, dimensionless
     derived_named = (
         Unit("rad", 1.0, DIM_0),
-        Unit("sr", 1.0, DIM_0),
+        Unit("sr",  1.0, DIM_0),
     )
 
-    # Derived (data-driven to reduce boilerplate)
-    # Format: (symbol, scale_to_si, dim)
+    # --- Helpful composite dimensions (readable + reuse) ---
+    FORCE        = dim_mul(MASS, dim_div(LENGTH, dim_pow(TIME, 2)))              # N
+    PRESSURE     = dim_div(FORCE, dim_pow(LENGTH, 2))                             # Pa
+    ENERGY       = dim_mul(FORCE, LENGTH)                                         # J
+    POWER        = dim_div(ENERGY, TIME)                                          # W
+    CHARGE       = dim_mul(CURRENT, TIME)                                         # C
+    VOLTAGE      = dim_div(POWER, CURRENT)                                        # V
+    CAPACITANCE  = dim_div(CHARGE, VOLTAGE)                                       # F
+    RESISTANCE   = dim_div(VOLTAGE, CURRENT)                                      # Ω
+    CONDUCTANCE  = dim_div(CURRENT, VOLTAGE)                                      # S
+    FLUX         = dim_mul(VOLTAGE, TIME)                                         # Wb
+    FLUX_DENSITY = dim_div(FLUX, dim_pow(LENGTH, 2))                              # T (tesla)
+    INDUCTANCE   = dim_div(FLUX, CURRENT)                                         # H
+    LUMEN        = LUMINOUS                                                       # lm = cd·sr, sr ≡ dimensionless
+    LUX          = dim_div(LUMEN, dim_pow(LENGTH, 2))                             # lx
+    FREQUENCY    = dim_pow(TIME, -1)                                              # Hz, Bq
+    DOSE         = dim_div(ENERGY, MASS)                                          # Gy, Sv
+    CATALYTIC    = dim_div(AMOUNT, TIME)                                          # kat
+
+    # Derived (symbol, scale_to_si, dim)
     derived_units = (
-        ("g", 1e-3, M),
-        ("Hz", 1.0, dim_pow(T, -1)),
-        ("N", 1.0, dim_mul(M, dim_div(L, dim_pow(T, 2)))),            # kg·m/s²
-        ("Pa", 1.0, dim_div(dim_mul(M, dim_div(L, dim_pow(T, 2))), dim_pow(L, 2))),  # N/m²
-        ("J", 1.0, dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L)), # N·m
-        ("W", 1.0, dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T)),   # J/s
-        ("C", 1.0, dim_mul(I, T)),
-        ("V", 1.0, dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I)),
-        ("F", 1.0, dim_div(dim_mul(I, T), dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I))),
-        ("Ω", 1.0, dim_div(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), I)),
-        ("S", 1.0, dim_div(I, dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I))),
-        ("Wb", 1.0, dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T)),
-        ("T", 1.0, dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), dim_pow(L, 2))),
-        ("H", 1.0, dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), I)),
-        ("lm", 1.0, dim_mul(J, DIM_0)),  # cd·sr (sr is DIM_0)
-        ("lx", 1.0, dim_div(dim_mul(J, DIM_0), dim_pow(L, 2))),
-        ("Bq", 1.0, dim_pow(T, -1)),
-        ("Gy", 1.0, dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), M)),  # J/kg
-        ("Sv", 1.0, dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), M)),  # same as Gy
-        ("kat", 1.0, dim_div(N, T)),
+        ("g",  1e-3, MASS),           # gram
+        ("Hz", 1.0,  FREQUENCY),
+        ("N",  1.0,  FORCE),
+        ("Pa", 1.0,  PRESSURE),
+        ("J",  1.0,  ENERGY),
+        ("W",  1.0,  POWER),
+        ("C",  1.0,  CHARGE),
+        ("V",  1.0,  VOLTAGE),
+        ("F",  1.0,  CAPACITANCE),
+        ("Ω",  1.0,  RESISTANCE),
+        ("S",  1.0,  CONDUCTANCE),
+        ("Wb", 1.0,  FLUX),
+        ("T",  1.0,  FLUX_DENSITY),   # tesla (string) vs TIME (var) is no longer confusing
+        ("H",  1.0,  INDUCTANCE),
+        ("lm", 1.0,  LUMEN),
+        ("lx", 1.0,  LUX),
+        ("Bq", 1.0,  FREQUENCY),
+        ("Gy", 1.0,  DOSE),
+        ("Sv", 1.0,  DOSE),
+        ("kat",1.0,  CATALYTIC),
     )
 
     # Register all
