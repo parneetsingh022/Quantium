@@ -252,8 +252,8 @@ def _bootstrap_default_registry() -> UnitsRegistry:
         ("lm", 1.0, dim_mul(J, DIM_0)),  # cd·sr (sr is DIM_0)
         ("lx", 1.0, dim_div(dim_mul(J, DIM_0), dim_pow(L, 2))),
         ("Bq", 1.0, dim_pow(T, -1)),
-        ("Gy", 1.0, dim_div(dim_mul(dim_div(L, dim_pow(T, 2)), M), M)),  # J/kg = (N·m)/kg simplified; same as original Gy dim
-        ("Sv", 1.0, dim_div(dim_mul(dim_div(L, dim_pow(T, 2)), M), M)),  # same as Gy
+        ("Gy", 1.0, dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), M)),  # J/kg
+        ("Sv", 1.0, dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), M)),  # same as Gy
         ("kat", 1.0, dim_div(N, T)),
     )
 

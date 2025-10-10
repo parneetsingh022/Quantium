@@ -243,3 +243,46 @@ def test_dimension_relationships(reg):
 
     S_dim = dim_div(A, V_dim)
     assert reg.get("S").dim == S_dim
+
+
+
+@pytest.mark.parametrize("sym, dim_expr, scale", [
+    # frequency & mechanics
+    ("Hz", dim_pow(T, -1), 1.0),
+    ("N",  dim_mul(M, dim_div(L, dim_pow(T, 2))), 1.0),
+    ("Pa", dim_div(dim_mul(M, dim_div(L, dim_pow(T, 2))), dim_pow(L, 2)), 1.0),
+    ("J",  dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), 1.0),
+    ("W",  dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), 1.0),
+
+    # electricity
+    ("C",  dim_mul(I, T), 1.0),
+    ("V",  dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), 1.0),
+    ("F",  dim_div(dim_mul(I, T), dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I)), 1.0),
+    ("Ω",  dim_div(  # V / A
+            dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), I), 1.0),
+    ("S",  dim_div(I, dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I)), 1.0),
+    ("Wb", dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), 1.0),
+    ("T",  dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), dim_pow(L, 2)), 1.0),
+    ("H",  dim_div(dim_mul(dim_div(dim_div(dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), T), I), T), I), 1.0),
+
+    # photometry (sr is DIM_0 so lm = cd)
+    ("lm", dim_mul(J, DIM_0), 1.0),
+    ("lx", dim_div(dim_mul(J, DIM_0), dim_pow(L, 2)), 1.0),
+
+    # radioactivity & dose
+    ("Bq", dim_pow(T, -1), 1.0),
+    ("Gy", dim_div(  # J/kg
+            dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), M), 1.0),
+    ("Sv", dim_div(  # same as Gy
+            dim_mul(dim_mul(M, dim_div(L, dim_pow(T, 2))), L), M), 1.0),
+
+    # catalytic activity
+    ("kat", dim_div(N, T), 1.0),
+
+    # mass non-SI base
+    ("g",  M, 1e-3),
+])
+def test_all_derived_units_dimensions_and_scales(reg, sym, dim_expr, scale):
+    u = reg.get(sym)
+    assert u.dim == dim_expr
+    assert u.scale_to_si == pytest.approx(scale)
