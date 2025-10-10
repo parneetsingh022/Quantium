@@ -296,7 +296,7 @@ DEFAULT_REGISTRY: UnitsRegistry = _bootstrap_default_registry()
 
 
 # ---------------------------------------------------------------------------
-# Convenience functions mirroring the old API (optional)
+# Convenience functions mirroring the old API
 # ---------------------------------------------------------------------------
 
 def register_unit(unit: Unit) -> None:
