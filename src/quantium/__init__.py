@@ -5,7 +5,7 @@ Quantium provides tools for defining, manipulating, and validating physical quan
 units, ensuring robust and expressive modeling across scientific and engineering workflows.
 """
 
-from quantium.units.units_registry import get_unit
+from quantium.units.registry import get_unit
 
 __version__ = "0.0.1a0"
 __author__ = "Parneet Sidhu"

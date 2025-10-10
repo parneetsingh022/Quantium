@@ -106,7 +106,7 @@ class Quantity:
         if sym:
             # Use the registry instance if you want (optional)
             try:
-                from quantium.units.units_registry import get_unit
+                from quantium.units.registry import get_unit
                 si_unit = get_unit(sym)            # should have scale_to_si == 1.0
             except Exception:
                 # Fallback if you want to avoid importing the registry here
