@@ -6,6 +6,7 @@ from quantium.core.dimensions import (
     DIM_0, LENGTH, TEMPERATURE, dim_mul, dim_div, dim_pow
 )
 from quantium.core.quantity import Unit, Quantity
+from quantium.units.registry import DEFAULT_REGISTRY as ureg
 
 
 # -------------------------------
@@ -225,3 +226,19 @@ def test_repr_upgrades_to_preferred_symbol_when_scale_is_1(monkeypatch):
     q = 3 @ m
     # scale_to_si == 1.0 -> allowed to upgrade pretty name to "m"
     assert repr(q) == "3 m"
+
+
+# -------------------------------
+# Reciprocal test for units
+# -------------------------------
+@pytest.mark.regression(reason="Issue #19: Unit division with 1 gives error...")
+def test_unit_reciprocal():
+    s = ureg.get('s')
+
+    try:
+        r1 = 1 / s
+        r2 = s ** -1
+        r3 = 1 / s**3
+        r4 = 1 / s**-1
+    except Exception as e:
+        pytest.fail(f"Reciprocal of 's' raised an unexpected exception: {e}")
