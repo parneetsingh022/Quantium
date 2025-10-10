@@ -27,6 +27,26 @@ from quantium.core.dimensions import Dim, dim_div, dim_mul, dim_pow, DIM_0
 from quantium.core.utils import format_dim
 import re
 
+_POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
+
+def _normalize_power_name(name: str) -> str:
+    """
+    Make names canonical:
+    - 'x^1'  -> 'x'
+    - 'x^0'  -> '1'   (dimensionless label; adjust if you prefer something else)
+    - 'x^-1' stays 'x^-1'
+    """
+    m = _POWER_RE.match(name)
+    if not m:
+        return name
+    base = m.group("base")
+    exp = int(m.group("exp"))
+    if exp == 1:
+        return base
+    if exp == 0:
+        return "1"
+    return f"{base}^{exp}"
+
 
 @dataclass(frozen=True, slots=True)
 class Unit:
@@ -70,12 +90,48 @@ class Unit:
         new_unit_name = f"{self.name}/{other.name}"
         new_scale = self.scale_to_si / other.scale_to_si
         return Unit(new_unit_name, new_scale, new_dim)
+    
+    def __rtruediv__(self, n: int | float):
+        if n != 1:
+            raise TypeError(
+                f"Invalid operation: cannot divide {n} by a Unit ({self.name}). "
+                "Only 1/unit (reciprocal) is supported."
+            )
 
-    def __pow__(self, n : int) -> Unit:
+        new_dim = dim_div(DIM_0, self.dim)
+        name = self.name
+
+        if name.startswith("1/"):
+            # 1/(1/x) -> x
+            name = name[2:]
+        else:
+            m = _POWER_RE.match(name)
+            if m:
+                base = m.group("base")
+                k = int(m.group("exp"))
+                name = f"{base}^{-k}"    # 1/(s^-3) -> s^3, 1/(s^3) -> s^-3
+            else:
+                name = f"{name}^-1"      # 1/s -> s^-1   (key change)
+        
+        normalized_name = _normalize_power_name(name)
+        new_scale = 1 / self.scale_to_si
+        return Unit(normalized_name, new_scale, new_dim)
+        
+
+    def __pow__(self, n: int) -> Unit:
         new_dim = dim_pow(self.dim, n)
-        new_unit_name = f"{self.name}^{n}"
+        # Canonical naming:
+        if n == 0:
+            new_unit_name = f"{self.name}^0"  # or maybe a specific "dimensionless" name if you prefer
+        elif n == 1:
+            new_unit_name = self.name
+        else:
+            new_unit_name = f"{self.name}^{n}"   # handles negatives like s^-3
+
+        normalized_name = _normalize_power_name(new_unit_name)
+
         new_scale = self.scale_to_si ** n
-        return Unit(new_unit_name, new_scale, new_dim)
+        return Unit(normalized_name, new_scale, new_dim)
 
 
 class Quantity:
