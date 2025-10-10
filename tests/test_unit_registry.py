@@ -21,6 +21,7 @@ from quantium.core.dimensions import (
 # We import the module under test once, and access internals we intentionally
 # rely on in tests (like _bootstrap_default_registry).
 import quantium.units.registry as regmod
+from quantium.units.registry import UnitsRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -205,14 +206,15 @@ def test_thread_safe_prefixed_creation(reg):
 
 def test_convenience_functions_use_default_registry(patched_default):
     # register a custom unit through the free function and fetch it back
-    regmod.register_unit(Unit("ft", 0.3048, LENGTH))
-    out = regmod.get_unit("ft")
+    ureg = UnitsRegistry()
+    ureg.register(Unit("ft", 0.3048, LENGTH))
+    out = ureg.get("ft")
     assert out.name == "ft"
     assert out.scale_to_si == pytest.approx(0.3048)
 
     # alias convenience function
-    regmod.register_alias("foot", "ft")
-    assert regmod.get_unit("foot") is out
+    ureg.register_alias("foot", "ft")
+    assert ureg.get("foot") is out
 
 
 # ---------------------------------------------------------------------------
