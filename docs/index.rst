@@ -3,15 +3,63 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-quantium documentation
-======================
+Quantium
+=======================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+.. raw:: html
+
+   <div class="intro-container">
+      <img src="_static/quantium_logo.png" alt="Quantium Logo">
+      <div>
+        <p><strong>Welcome to Quantium</strong> — a lightweight Python library for mathematical and scientific computations 
+        with units. It enables dimensional analysis and unit-safe calculations through a simple, dependency-minimal design. 
+        NumPy integration is planned for future releases..</p>
+      </div>
+   </div>
 
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
 
+Getting Started
+---------------
+
+To install Quantium, simply run:
+
+.. code-block:: bash
+
+   pip install quantium
+
+Once installed, you can start performing unit-safe calculations:
+
+.. code-block:: python
+
+   from quantium import get_unit
+
+   m = get_unit('m')
+   s = get_unit('s')
+
+   d = 10 @ m
+   t = 1 @ s
+   v = d / t
+
+   print(v)
+
+**Output**
+
+.. code-block:: none
+
+   10 m/s
+
+
+Contributing
+------------
+
+We welcome contributions from the community!  
+To get started, see the :doc:`contributing` guide for details on code style, testing, and pull requests.
+
+----
+
+License
+-------
+
+Quantium is distributed under the MIT License.  
+See the :doc:`changelog` for version history and recent updates.
