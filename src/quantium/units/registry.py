@@ -295,26 +295,6 @@ def _bootstrap_default_registry() -> UnitsRegistry:
 DEFAULT_REGISTRY: UnitsRegistry = _bootstrap_default_registry()
 
 
-# ---------------------------------------------------------------------------
-# Convenience functions mirroring the old API
-# ---------------------------------------------------------------------------
-
-def register_unit(unit: Unit) -> None:
-    DEFAULT_REGISTRY.register(unit)
-
-
-def get_unit(symbol: str) -> Unit:
-    return DEFAULT_REGISTRY.get(symbol)
-
-
-def register_alias(alias: str, canonical: str) -> None:
-    DEFAULT_REGISTRY.register_alias(alias, canonical)
-
-
-def all_units() -> Mapping[str, Unit]:
-    return DEFAULT_REGISTRY.all()
-
-
 __all__ = [
     "Prefix",
     "UnitsRegistry",
