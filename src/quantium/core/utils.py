@@ -163,10 +163,10 @@ _PREFERRED_BY_DIM = None
 
 def _build_pref_map():
     # Local import avoids circular import at module import time
-    from quantium.units.registry import UNIT_REGISTRY
+    from quantium.units.registry import DEFAULT_REGISTRY
     pref = {}
     for sym in _PREFERRED_ORDER:
-        u = UNIT_REGISTRY.get(sym)
+        u = DEFAULT_REGISTRY.get(sym)
         if u and getattr(u, "scale_to_si", None) == 1.0:
             pref[_dim_key(u.dim)] = sym
     return pref

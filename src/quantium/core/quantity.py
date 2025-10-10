@@ -57,6 +57,25 @@ class Unit:
         
     def __rmatmul__(self, value: float) -> Quantity:
         return Quantity(float(value), self)
+    
+    def __mul__(self, other : Unit) -> Unit:
+        new_dim = dim_mul(self.dim, other.dim)
+        # compose unit name and scale
+        new_unit_name = f"{self.name}·{other.name}"
+        new_scale = self.scale_to_si * other.scale_to_si
+        return Unit(new_unit_name, new_scale, new_dim)
+
+    def __truediv__(self, other : Unit) -> Unit:
+        new_dim = dim_div(self.dim, other.dim)
+        new_unit_name = f"{self.name}/{other.name}"
+        new_scale = self.scale_to_si / other.scale_to_si
+        return Unit(new_unit_name, new_scale, new_dim)
+
+    def __pow__(self, n : int) -> Unit:
+        new_dim = dim_pow(self.dim, n)
+        new_unit_name = f"{self.name}^{n}"
+        new_scale = self.scale_to_si ** n
+        return Unit(new_unit_name, new_scale, new_dim)
 
 
 class Quantity:
@@ -135,11 +154,7 @@ class Quantity:
             return Quantity((self._mag_si * float(other)) / self.unit.scale_to_si, self.unit)
 
         # quantity × quantity
-        new_dim = dim_mul(self.dim, other.dim)
-        # compose unit name and scale
-        new_unit_name = f"{self.unit.name}·{other.unit.name}"
-        new_scale = self.unit.scale_to_si * other.unit.scale_to_si
-        new_unit = Unit(new_unit_name, new_scale, new_dim)
+        new_unit = self.unit * other.unit
         # convert SI magnitude back to the composed unit
         return Quantity((self._mag_si * other._mag_si) / new_unit.scale_to_si, new_unit)
 
@@ -153,10 +168,7 @@ class Quantity:
             return Quantity((self._mag_si / float(other)) / self.unit.scale_to_si, self.unit)
 
         # quantity / quantity
-        new_dim = dim_div(self.dim, other.dim)
-        new_unit_name = f"{self.unit.name}/{other.unit.name}"
-        new_scale = self.unit.scale_to_si / other.unit.scale_to_si
-        new_unit = Unit(new_unit_name, new_scale, new_dim)
+        new_unit = self.unit / other.unit
         return Quantity((self._mag_si / other._mag_si) / new_unit.scale_to_si, new_unit)
 
     def __rtruediv__(self, other: float | int) -> "Quantity":
@@ -170,10 +182,7 @@ class Quantity:
         return Quantity((float(other) / self._mag_si) / new_unit.scale_to_si, new_unit)
 
     def __pow__(self, n: int) -> "Quantity":
-        new_dim = dim_pow(self.dim, n)
-        new_unit_name = f"{self.unit.name}^{n}"
-        new_scale = self.unit.scale_to_si ** n
-        new_unit = Unit(new_unit_name, new_scale, new_dim)
+        new_unit = self.unit ** 2
         return Quantity((self._mag_si ** n) / new_unit.scale_to_si, new_unit)
     
     def __repr__(self) -> str:
