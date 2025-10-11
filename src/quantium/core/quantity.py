@@ -116,6 +116,11 @@ class Unit:
         normalized_name = _normalize_power_name(name)
         new_scale = 1 / self.scale_to_si
         return Unit(normalized_name, new_scale, new_dim)
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Unit):
+            return NotImplemented
+        return self.scale_to_si == other.scale_to_si and self.dim == other.dim
         
 
     def __pow__(self, n: int) -> Unit:
