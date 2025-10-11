@@ -275,6 +275,27 @@ def _bootstrap_default_registry() -> UnitsRegistry:
         ("kat",1.0,  CATALYTIC),
     )
 
+    time_units = (
+        ("min",        60.0,                             TIME),  # minute
+        ("h",          60.0 * 60.0,                      TIME),  # hour
+        ("d",          24.0 * 60.0 * 60.0,               TIME),  # day
+        ("wk",         7.0 * 24.0 * 60.0 * 60.0,         TIME),  # week
+        ("fortnight",  14.0 * 24.0 * 60.0 * 60.0,        TIME),  # fortnight
+
+        # Civil (Gregorian) average month/year
+        ("mo",         (365.2425 / 12.0) * 24.0 * 3600.0, TIME), # month (avoid "m")
+        ("yr",         365.2425 * 24.0 * 3600.0,          TIME), # year (Gregorian mean)
+
+        # Astronomy (explicit)
+        ("yr_julian",  365.25 * 24.0 * 3600.0,            TIME), # Julian year
+
+        # Longer spans (Gregorian-based)
+        ("decade",     10.0  * 365.2425 * 24.0 * 3600.0,  TIME),
+        ("century",    100.0 * 365.2425 * 24.0 * 3600.0,  TIME),
+        ("millennium", 1000.0* 365.2425 * 24.0 * 3600.0,  TIME),
+    )
+
+
     # Register all
     for u in base_units:
         reg.register(u)
@@ -282,11 +303,35 @@ def _bootstrap_default_registry() -> UnitsRegistry:
         reg.register(u)
     for sym, scale, dim in derived_units:
         reg.register(Unit(sym, scale, dim))
+    for sym, scale, dim in derived_units + time_units:
+        reg.register(Unit(sym, scale, dim))
 
     # Common aliases
     reg.register_alias("ohm", "Ω")
     reg.register_alias("Ohm", "Ω")
     reg.register_alias("OHM", "Ω")
+
+    # Time aliases
+    reg.register_alias("minute", "min")
+    reg.register_alias("minutes", "min")
+    reg.register_alias("hr", "h")
+    reg.register_alias("hour", "h")
+    reg.register_alias("hours", "h")
+    reg.register_alias("day", "d")
+    reg.register_alias("days", "d")
+    reg.register_alias("week", "wk")
+    reg.register_alias("weeks", "wk")
+    reg.register_alias("fortnights", "fortnight")
+    reg.register_alias("month", "mo")
+    reg.register_alias("months", "mo")
+    reg.register_alias("year", "yr")
+    reg.register_alias("years", "yr")
+    reg.register_alias("annum", "yr")
+    reg.register_alias("dec", "decade")
+    reg.register_alias("decades", "decade")
+    reg.register_alias("cent", "century")
+    reg.register_alias("centuries", "century")
+    reg.register_alias("millennia", "millennium")
 
     return reg
 
