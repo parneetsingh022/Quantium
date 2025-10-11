@@ -3,7 +3,7 @@ import pytest
 from dataclasses import FrozenInstanceError
 
 from quantium.core.dimensions import (
-    DIM_0, LENGTH, TEMPERATURE, dim_mul, dim_div, dim_pow
+    DIM_0, LENGTH, TEMPERATURE, TIME, dim_mul, dim_div, dim_pow
 )
 from quantium.core.quantity import Unit, Quantity
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
@@ -370,3 +370,130 @@ def test_dimensionless_result_is_si_and_correct(sym_a, val_a, sym_b, val_b):
     # 3) Numeric correctness
     # r is already in SI since r.unit.scale_to_si == 1.0
     assert float(repr(r)) == pytest.approx(expected)
+
+
+# -------------------------------
+# Unit equality (regressions)
+# -------------------------------
+
+@pytest.mark.regression(reason="Issue #24: Units with identical dim & scale must compare equal regardless of name")
+def test_unit_equality_ignores_name_and_matches_scale_and_dim():
+    # Construct Newton from base units and compare with predefined "N"
+    kg = ureg.get("kg")
+    m  = ureg.get("m")
+    s  = ureg.get("s")
+    N1 = kg * m / (s ** 2)   # name "kg·m/s^2", scale 1.0, dim (1,1,-2,0,0,0,0)
+    N2 = ureg.get("N")       # name "N",         scale 1.0, dim (1,1,-2,0,0,0,0)
+
+    assert N1 == N2
+    # Sanity: names may differ but equality should be based on dim+scale only
+    assert N1.name != N2.name
+    assert N1.scale_to_si == N2.scale_to_si
+    assert N1.dim == N2.dim
+
+
+@pytest.mark.regression(reason="Units with different scales are not equal even if dimensions match")
+def test_unit_inequality_different_scale_same_dim():
+    m  = Unit("m", 1.0, LENGTH)
+    cm = Unit("cm", 0.01, LENGTH)
+    assert m != cm
+
+
+@pytest.mark.regression(reason="Units with different dimensions are not equal even if scales match")
+def test_unit_inequality_different_dim_same_scale():
+    # scale 1.0 but different dimensions (LENGTH vs TIME)
+    m = Unit("m", 1.0, LENGTH)
+    s = Unit("s", 1.0, TIME)
+    assert m != s
+
+
+@pytest.mark.regression(reason="__eq__ should return NotImplemented for incompatible types")
+def test_unit_equality_with_incompatible_type_returns_notimplemented():
+    m = Unit("m", 1.0, LENGTH)
+    # Direct dunder call to observe NotImplemented (== would coerce to False)
+    assert Unit.__eq__(m, 42) is NotImplemented
+    assert (m == 42) is False
+
+
+# -------------------------------
+# Quantity equality (regressions)
+# -------------------------------
+
+@pytest.mark.regression(reason="Quantities equal when SI magnitude and unit (by dim+scale) match")
+def test_quantity_equality_same_si_and_equivalent_units():
+    # Build equivalent units with different names but same dim/scale
+    kg = ureg.get("kg"); m = ureg.get("m"); s = ureg.get("s"); N = ureg.get("N")
+    unit_from_bases = kg * m / (s ** 2)   # equals N by dim+scale
+
+    q1 = 10 @ N
+    q2 = 10 @ unit_from_bases
+
+    # _mag_si identical & units compare equal (ignoring name)
+    assert q1 == q2
+
+
+@pytest.mark.regression(reason="Quantities with same SI magnitude but different unit scales are NOT equal by design")
+def test_quantity_inequality_same_si_magnitude_different_units():
+    # 100 cm and 1 m have same SI magnitude but units are not equal (scales differ),
+    # and current design includes unit equality in Quantity.__eq__.
+    m  = Unit("m", 1.0, LENGTH)
+    cm = Unit("cm", 0.01, LENGTH)
+
+    q_cm = 100 @ cm  # _mag_si = 1.0
+    q_m  = 1 @ m     # _mag_si = 1.0
+
+    assert q_cm != q_m
+
+
+@pytest.mark.regression(reason="Quantities with different SI magnitudes must not be equal even if units match")
+def test_quantity_inequality_different_si_magnitude_same_unit():
+    m = Unit("m", 1.0, LENGTH)
+    q1 = 2 @ m
+    q2 = 3 @ m
+    assert q1 != q2
+
+
+@pytest.mark.regression(reason="Quantity __eq__ returns NotImplemented for incompatible types")
+def test_quantity_equality_with_incompatible_type_returns_notimplemented():
+    m = Unit("m", 1.0, LENGTH)
+    q = 1 @ m
+    assert Quantity.__eq__(q, "not-a-quantity") is NotImplemented
+    assert (q == "not-a-quantity") is False
+
+
+# -------------------------------
+# Mixed constructions (extra safety)
+# -------------------------------
+
+@pytest.mark.regression(reason="Derived unit equality is stable across different build paths")
+def test_unit_equality_across_multiple_construction_paths():
+    # (kg·m)/s^2 == (kg/s^2)·m == kg·(m/s^2)
+    kg = ureg.get("kg"); m = ureg.get("m"); s = ureg.get("s")
+    u1 = kg * m / (s ** 2)
+    u2 = (kg / (s ** 2)) * m
+    u3 = kg * (m / (s ** 2))
+    assert u1 == u2 == u3
+
+
+@pytest.mark.regression(reason="Quantity equality consistent when units simplify to same dim/scale")
+def test_quantity_equality_when_units_simplify_to_same_dim_and_scale():
+    # Build two different-looking but equivalent units for velocity
+    m = Unit("m", 1.0, LENGTH)
+    s = Unit("s", 1.0, TIME)
+    ms = m / s
+
+    # Another velocity path: (m*s)/s^2 simplifies to m/s
+    alt = (m * s) / (s ** 2)
+    assert ms == alt  # unit equality check
+
+    q1 = 12 @ ms
+    q2 = 12 @ alt
+    assert q1 == q2
+
+
+@pytest.mark.regression(reason="Name differences never drive equality; only scale & dim")
+def test_unit_name_changes_do_not_affect_equality():
+    m = Unit("m", 1.0, LENGTH)
+    m_alias = m.as_name("meter")
+    assert m_alias.name != m.name
+    assert m_alias == m
