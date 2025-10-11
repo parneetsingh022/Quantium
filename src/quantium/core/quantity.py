@@ -75,6 +75,11 @@ class Unit:
         if not (self.scale_to_si > 0 and isfinite(self.scale_to_si)):
             raise ValueError("scale_to_si must be a positive, finite number")
         
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Unit):
+            return NotImplemented
+        return self.scale_to_si == other.scale_to_si and self.dim == other.dim
+        
     def __rmatmul__(self, value: float) -> Quantity:
         return Quantity(float(value), self)
     
@@ -158,12 +163,18 @@ class Quantity:
         self._mag_si = float(value) * unit.scale_to_si
         self.dim = unit.dim
         self.unit = unit
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Quantity):
+            return NotImplemented
         
+        return self._mag_si == other._mag_si and self.unit.dim == other.unit.dim
 
     def to(self, new_unit: Unit) -> Quantity:
         if new_unit.dim != self.dim:
             raise TypeError("Dimension mismatch in conversion")
         return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
+        
     
     def to_si(self) -> "Quantity":
         """
