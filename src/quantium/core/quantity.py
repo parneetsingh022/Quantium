@@ -75,6 +75,11 @@ class Unit:
         if not (self.scale_to_si > 0 and isfinite(self.scale_to_si)):
             raise ValueError("scale_to_si must be a positive, finite number")
         
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Unit):
+            return NotImplemented
+        return self.scale_to_si == other.scale_to_si and self.dim == other.dim
+        
     def __rmatmul__(self, value: float) -> Quantity:
         return Quantity(float(value), self)
     
@@ -116,11 +121,6 @@ class Unit:
         normalized_name = _normalize_power_name(name)
         new_scale = 1 / self.scale_to_si
         return Unit(normalized_name, new_scale, new_dim)
-    
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Unit):
-            return NotImplemented
-        return self.scale_to_si == other.scale_to_si and self.dim == other.dim
         
 
     def __pow__(self, n: int) -> Unit:
@@ -163,7 +163,12 @@ class Quantity:
         self._mag_si = float(value) * unit.scale_to_si
         self.dim = unit.dim
         self.unit = unit
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Quantity):
+            return NotImplemented
         
+        return self._mag_si == other._mag_si and self.unit == other.unit
 
     def to(self, new_unit: Unit) -> Quantity:
         if new_unit.dim != self.dim:
