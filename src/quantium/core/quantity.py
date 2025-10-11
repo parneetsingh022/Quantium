@@ -132,6 +132,9 @@ class Unit:
 
         new_scale = self.scale_to_si ** n
         return Unit(normalized_name, new_scale, new_dim)
+    
+    def as_name(self, name : str) -> Unit:
+        return Unit(name, self.scale_to_si, self.dim)
 
 
 class Quantity:
