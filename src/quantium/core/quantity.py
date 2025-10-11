@@ -132,6 +132,9 @@ class Unit:
 
         new_scale = self.scale_to_si ** n
         return Unit(normalized_name, new_scale, new_dim)
+    
+    def as_name(self, name : str) -> Unit:
+        return Unit(name, self.scale_to_si, self.dim)
 
 
 class Quantity:
@@ -225,6 +228,10 @@ class Quantity:
 
         # quantity / quantity
         new_unit = self.unit / other.unit
+        if new_unit.dim == DIM_0:
+            # dimensionless quantity has no name
+            new_unit = new_unit = Unit('', 1.0, DIM_0)
+
         return Quantity((self._mag_si / other._mag_si) / new_unit.scale_to_si, new_unit)
 
     def __rtruediv__(self, other: float | int) -> "Quantity":
@@ -258,8 +265,13 @@ class Quantity:
             sym = preferred_symbol_for_dim(self.dim)
             if sym:
                 pretty = sym  # symbol only; mag stays the same because factor is 1.0
-
+        
+        if self.dim == DIM_0:
+            return f"{mag:g}"
+        
         return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
+
+
         
 
         

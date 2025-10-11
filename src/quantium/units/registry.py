@@ -366,8 +366,4 @@ __all__ = [
     "Prefix",
     "UnitsRegistry",
     "DEFAULT_REGISTRY",
-    "register_unit",
-    "register_alias",
-    "get_unit",
-    "all_units",
 ]
