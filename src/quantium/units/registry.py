@@ -25,7 +25,7 @@ from dataclasses import dataclass
 import threading
 import re
 import unicodedata
-from typing import Dict, Iterable, Mapping, Optional, Tuple
+from typing import Dict, Iterable,  List, Mapping, Optional, Tuple
 
 from quantium.core.quantity import Unit
 from quantium.core.dimensions import (
@@ -126,6 +126,16 @@ class UnitsRegistry:
         self._lock = threading.RLock()
         self._units: Dict[str, Unit] = {}
         self._aliases: Dict[str, str] = {}
+        self._non_prefixable : List[str] = []
+
+    def set_non_prefixable(self, symbols: Iterable[str]) -> None:
+        """Mark unit symbols that must not accept SI prefixes (e.g., 'kg', 'min')."""
+        with self._lock:
+            self._non_prefixable = {normalize_symbol(s) for s in symbols}
+
+    def is_non_prefixable(self, symbol: str) -> bool:
+        """Query helper (symbol may be alias; we normalize only the token)."""
+        return normalize_symbol(symbol) in self._non_prefixable
 
     # -------------------------- public API ---------------------------------
     def register(self, unit: Unit) -> None:
@@ -173,6 +183,7 @@ class UnitsRegistry:
     def all(self) -> Mapping[str, Unit]:
         with self._lock:
             return dict(self._units)
+        
 
     # ------------------------- internals -----------------------------------
     def _split_prefix(self, symbol: str) -> Tuple[Optional[str], str]:
@@ -200,6 +211,9 @@ class UnitsRegistry:
 
         # Prevent stacked prefixes: base itself must not be prefixed
         if self._looks_prefixed(base_sym):
+            return None
+        
+        if base_sym in self._non_prefixable:
             return None
 
         factor = _PREFIX_FACTORS[prefix]
@@ -275,6 +289,27 @@ def _bootstrap_default_registry() -> UnitsRegistry:
         ("kat",1.0,  CATALYTIC),
     )
 
+    time_units = (
+        ("min",        60.0,                             TIME),  # minute
+        ("h",          60.0 * 60.0,                      TIME),  # hour
+        ("d",          24.0 * 60.0 * 60.0,               TIME),  # day
+        ("wk",         7.0 * 24.0 * 60.0 * 60.0,         TIME),  # week
+        ("fortnight",  14.0 * 24.0 * 60.0 * 60.0,        TIME),  # fortnight
+
+        # Civil (Gregorian) average month/year
+        ("mo",         (365.2425 / 12.0) * 24.0 * 3600.0, TIME), # month (avoid "m")
+        ("yr",         365.2425 * 24.0 * 3600.0,          TIME), # year (Gregorian mean)
+
+        # Astronomy (explicit)
+        ("yr_julian",  365.25 * 24.0 * 3600.0,            TIME), # Julian year
+
+        # Longer spans (Gregorian-based)
+        ("decade",     10.0  * 365.2425 * 24.0 * 3600.0,  TIME),
+        ("century",    100.0 * 365.2425 * 24.0 * 3600.0,  TIME),
+        ("millennium", 1000.0* 365.2425 * 24.0 * 3600.0,  TIME),
+    )
+
+
     # Register all
     for u in base_units:
         reg.register(u)
@@ -282,11 +317,43 @@ def _bootstrap_default_registry() -> UnitsRegistry:
         reg.register(u)
     for sym, scale, dim in derived_units:
         reg.register(Unit(sym, scale, dim))
+    for sym, scale, dim in derived_units + time_units:
+        reg.register(Unit(sym, scale, dim))
 
     # Common aliases
     reg.register_alias("ohm", "Ω")
     reg.register_alias("Ohm", "Ω")
     reg.register_alias("OHM", "Ω")
+
+    # Time aliases
+    reg.register_alias("minute", "min")
+    reg.register_alias("minutes", "min")
+    reg.register_alias("hr", "h")
+    reg.register_alias("hour", "h")
+    reg.register_alias("hours", "h")
+    reg.register_alias("day", "d")
+    reg.register_alias("days", "d")
+    reg.register_alias("week", "wk")
+    reg.register_alias("weeks", "wk")
+    reg.register_alias("fortnights", "fortnight")
+    reg.register_alias("month", "mo")
+    reg.register_alias("months", "mo")
+    reg.register_alias("year", "yr")
+    reg.register_alias("years", "yr")
+    reg.register_alias("annum", "yr")
+    reg.register_alias("dec", "decade")
+    reg.register_alias("decades", "decade")
+    reg.register_alias("cent", "century")
+    reg.register_alias("centuries", "century")
+    reg.register_alias("millennia", "millennium")
+
+
+    reg.set_non_prefixable([
+        "kg",
+        "min", "h", "d", "wk", "fortnight",
+        "mo", "yr", "yr_julian",
+        "decade", "century", "millennium",
+    ])
 
     return reg
 

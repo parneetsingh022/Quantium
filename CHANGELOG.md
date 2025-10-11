@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Support for unit algebra: units can now be combined using multiplication (`*`), division (`/`), and exponentiation (`**`) to produce new derived units with correct dimensional analysis (e.g., `m/s`, `m^2`, `N·m`, etc.).
 
+- Added common time units (min, h, d, wk, fortnight, mo, yr, yr_julian, decade, century, millennium) with full alias support and SI-based scaling in `Default Registry`.
+
 ## [0.0.1a0] - 2025-10-09
 ### Added
 - Initial alpha release of **Quantium**.
