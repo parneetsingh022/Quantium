@@ -432,17 +432,18 @@ def test_quantity_equality_same_si_and_equivalent_units():
     assert q1 == q2
 
 
-@pytest.mark.regression(reason="Quantities with same SI magnitude but different unit scales are NOT equal by design")
-def test_quantity_inequality_same_si_magnitude_different_units():
-    # 100 cm and 1 m have same SI magnitude but units are not equal (scales differ),
-    # and current design includes unit equality in Quantity.__eq__.
+@pytest.mark.regression(reason="Issue: #28 Quantities with same SI magnitude but different unit scales should be equal")
+def test_quantity_equality_same_si_magnitude_different_units():
+    # 100 cm and 1 m have same SI magnitude (both represent 1.0 m in SI),
+    # and __eq__ now compares normalized SI magnitudes and dimensions, not unit identity.
     m  = Unit("m", 1.0, LENGTH)
     cm = Unit("cm", 0.01, LENGTH)
 
     q_cm = 100 @ cm  # _mag_si = 1.0
     q_m  = 1 @ m     # _mag_si = 1.0
 
-    assert q_cm != q_m
+    # They should now compare equal because their physical values are identical.
+    assert q_cm == q_m
 
 
 @pytest.mark.regression(reason="Quantities with different SI magnitudes must not be equal even if units match")

@@ -168,12 +168,13 @@ class Quantity:
         if not isinstance(other, Quantity):
             return NotImplemented
         
-        return self._mag_si == other._mag_si and self.unit == other.unit
+        return self._mag_si == other._mag_si and self.unit.dim == other.unit.dim
 
     def to(self, new_unit: Unit) -> Quantity:
         if new_unit.dim != self.dim:
             raise TypeError("Dimension mismatch in conversion")
         return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
+        
     
     def to_si(self) -> "Quantity":
         """
