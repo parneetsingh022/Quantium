@@ -12,6 +12,8 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: write   # REQUIRED for PR comments
+
 
 jobs:
   # Lint + type-check via tox (single Python is enough)
