@@ -97,7 +97,7 @@ class Unit:
         new_scale = self.scale_to_si / other.scale_to_si
         return Unit(new_unit_name, new_scale, new_dim)
     
-    def __rtruediv__(self, n: int | float):
+    def __rtruediv__(self, n: int | float) -> Unit:
         if n != 1:
             raise TypeError(
                 f"Invalid operation: cannot divide {n} by a Unit ({self.name}). "
@@ -193,13 +193,7 @@ class Quantity:
         # 1) Try a preferred named SI unit for this dimension (A, N, W, Pa, …)
         sym = preferred_symbol_for_dim(self.dim)  # returns e.g. "A", "N", "W", or None
         if sym:
-            # Use the registry instance if you want (optional)
-            try:
-                from quantium.units.registry import get_unit
-                si_unit = get_unit(sym)            # should have scale_to_si == 1.0
-            except Exception:
-                # Fallback if you want to avoid importing the registry here
-                si_unit = Unit(sym, 1.0, self.dim)
+            si_unit = Unit(sym, 1.0, self.dim)
             return Quantity(self._mag_si, si_unit) # _mag_si is already in SI
 
         # 2) Fall back to composed base-SI name for this dimension
