@@ -23,13 +23,11 @@ from typing import (
     cast,
 )
 
-from typing import cast
-
 # Backcompat for typing features if needed
 try:
-    from typing import Protocol, runtime_checkable, TypeAlias
+    from typing import Protocol, TypeAlias, runtime_checkable
 except Exception:  # pragma: no cover - for older Python
-    from typing_extensions import Protocol, runtime_checkable, TypeAlias
+    from typing_extensions import Protocol, TypeAlias, runtime_checkable
 
 # A dimension is a 7-tuple of integer exponents: (L, M, T, I, Θ, N, J)
 Dim: TypeAlias = Tuple[int, int, int, int, int, int, int]

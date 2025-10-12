@@ -8,7 +8,7 @@ name = "quantium"
 version = "0.0.1a0"
 description = "A modern Python library for dimensional analysis and unit-safe scientific computation."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{ name = "Parneet Sidhu"}]
 keywords = [

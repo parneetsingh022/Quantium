@@ -23,11 +23,10 @@ The system supports:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
+from math import isclose, isfinite
 import re
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
-from math import isfinite, isclose
 
 _POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
 
