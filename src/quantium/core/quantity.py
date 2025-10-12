@@ -27,6 +27,7 @@ from math import isfinite
 import re
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
+from math import isfinite, isclose
 
 _POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
 
@@ -79,7 +80,11 @@ class Unit:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Unit):
             return NotImplemented
-        return self.scale_to_si == other.scale_to_si and self.dim == other.dim
+        # dimension must match exactly; scale_to_si can have tiny FP noise
+        return (
+            self.dim == other.dim
+            and isclose(self.scale_to_si, other.scale_to_si, rel_tol=1e-12, abs_tol=0.0)
+        )
         
     def __rmatmul__(self, value: float) -> Quantity:
         return Quantity(float(value), self)
@@ -168,8 +173,11 @@ class Quantity:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Quantity):
             return NotImplemented
-        
-        return self._mag_si == other._mag_si and self.unit.dim == other.unit.dim
+        # Same physical dimension; SI magnitudes equal within tolerance.
+        return (
+            self.dim == other.dim
+            and isclose(self._mag_si, other._mag_si, rel_tol=1e-12, abs_tol=0.0)
+        )
 
     def to(self, new_unit: Unit) -> Quantity:
         if new_unit.dim != self.dim:
@@ -251,7 +259,7 @@ class Quantity:
         return Quantity((float(other) / self._mag_si) / new_unit.scale_to_si, new_unit)
 
     def __pow__(self, n: int) -> "Quantity":
-        new_unit = self.unit ** 2
+        new_unit = self.unit ** n
         return Quantity((self._mag_si ** n) / new_unit.scale_to_si, new_unit)
     
     def __repr__(self) -> str:

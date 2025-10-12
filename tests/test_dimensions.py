@@ -2,19 +2,11 @@ import pytest
 
 # If your file lives at src/quantium/units/dimensions.py, this import will work:
 from quantium.core.dimensions import (
-    AMOUNT,
-    CURRENT,
-    DIM_0,
-    LENGTH,
-    LUMINOUS,
-    MASS,
-    TEMPERATURE,
-    TIME,
     Dim,
-    dim_div,
-    dim_mul,
-    dim_pow,
+    LENGTH, MASS, TIME, CURRENT, TEMPERATURE, AMOUNT, LUMINOUS, DIM_0,
+    dim_mul, dim_div, dim_pow
 )
+
 
 # --- Basic structure & base vectors -------------------------------------------------
 
@@ -47,7 +39,7 @@ def test_dimensional_basis():
 ])
 def test_dim_mul(a, b, expected):
     # vector add of exponents
-    assert dim_mul(a, b) == tuple(x+y for x,y in zip(a,b, strict=False))
+    assert dim_mul(a, b) == tuple(x+y for x,y in zip(a,b))
     # commutativity
     assert dim_mul(a, b) == dim_mul(b, a)
     # selected expected checks
