@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 import threading
-from typing import Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Dict, Iterable, Mapping, Optional, Tuple
 import unicodedata
 
 from quantium.core.dimensions import (
