@@ -72,8 +72,6 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
-          # For public repos, token can be omitted. For private repos, set the secret.
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           flags: unittests
           fail_ci_if_error: true
