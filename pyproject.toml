@@ -32,3 +32,23 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["quantium*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+fix = true
+unsafe-fixes = false  # only apply safe fixes by default
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = ["E203", "E266", "E501"]  # ignore long-line & a few style rules
+
+# import sorting / extra rule settings
+[tool.ruff.lint.isort]
+known-first-party = ["quantium"]
+force-sort-within-sections = true
+
+# formatter settings (if you use `ruff format`)
+[tool.ruff.format]
+quote-style = "preserve"
+indent-style = "space"

@@ -6,23 +6,28 @@
 # instance for most tests, and monkeypatch DEFAULT_REGISTRY where needed.
 
 import threading
-import time
-import types
-import importlib
-import builtins
+
 import pytest
 
-from quantium.core.quantity import Unit
 from quantium.core.dimensions import (
-    LENGTH, MASS, TIME, CURRENT, TEMPERATURE, AMOUNT, LUMINOUS, DIM_0,
-    dim_mul, dim_div, dim_pow,
+    AMOUNT,
+    CURRENT,
+    DIM_0,
+    LENGTH,
+    LUMINOUS,
+    MASS,
+    TEMPERATURE,
+    TIME,
+    dim_div,
+    dim_mul,
+    dim_pow,
 )
+from quantium.core.quantity import Unit
 
 # We import the module under test once, and access internals we intentionally
 # rely on in tests (like _bootstrap_default_registry).
 import quantium.units.registry as regmod
 from quantium.units.registry import UnitsRegistry
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

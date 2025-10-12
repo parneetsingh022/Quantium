@@ -1,13 +1,11 @@
-import math
-import pytest
 from dataclasses import FrozenInstanceError
+import math
 
-from quantium.core.dimensions import (
-    DIM_0, LENGTH, TEMPERATURE, TIME, dim_mul, dim_div, dim_pow
-)
-from quantium.core.quantity import Unit, Quantity
+import pytest
+
+from quantium.core.dimensions import DIM_0, LENGTH, TEMPERATURE, TIME, dim_div, dim_mul, dim_pow
+from quantium.core.quantity import Quantity, Unit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
-
 
 # -------------------------------
 # Unit: construction & validation
@@ -157,15 +155,15 @@ def test_power_of_quantity():
 
 def test_to_si_uses_preferred_symbol_when_available(monkeypatch):
     # Arrange: make preferred_symbol_for_dim return a symbol for LENGTH
-    from quantium import core as _core
+    import quantium.core.utils as utils
     # Monkeypatch utils functions that to_si imports locally
     def fake_preferred(dim):
         return "m" if dim == LENGTH else None
     def fake_format(dim):
         return "LENGTH?"  # should not be used in this test
 
-    monkeypatch.setattr(_core.utils, "preferred_symbol_for_dim", fake_preferred, raising=True)
-    monkeypatch.setattr(_core.utils, "format_dim", fake_format, raising=True)
+    monkeypatch.setattr(utils, "preferred_symbol_for_dim", fake_preferred, raising=True)
+    monkeypatch.setattr(utils, "format_dim", fake_format, raising=True)
 
     cm = Unit("cm", 0.01, LENGTH)
     q_si = (123 @ cm).to_si()
@@ -177,15 +175,15 @@ def test_to_si_uses_preferred_symbol_when_available(monkeypatch):
     assert math.isclose(q_si._mag_si, 1.23)
 
 def test_to_si_fallbacks_to_formatted_dim_when_no_symbol(monkeypatch):
-    from quantium import core as _core
+    import quantium.core.utils as utils
     def fake_preferred(dim):
         return None  # force fallback
     def fake_format(dim):
         # For LENGTH/TEMPERATURE, produce a composed name:
         return "m/s" if dim == dim_div(LENGTH, TEMPERATURE) else "1"
 
-    monkeypatch.setattr(_core.utils, "preferred_symbol_for_dim", fake_preferred, raising=True)
-    monkeypatch.setattr(_core.utils, "format_dim", fake_format, raising=True)
+    monkeypatch.setattr(utils, "preferred_symbol_for_dim", fake_preferred, raising=True)
+    monkeypatch.setattr(utils, "format_dim", fake_format, raising=True)
 
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TEMPERATURE)
@@ -202,12 +200,12 @@ def test_to_si_fallbacks_to_formatted_dim_when_no_symbol(monkeypatch):
 
 def test_repr_keeps_non_si_unit_name(monkeypatch):
     # Ensure repr uses the current unit name ("cm") and does not replace with a symbol
-    from quantium import core as _core
+    import quantium.core.utils as utils
 
     # Make prettifier a no-op passthrough so we can assert on exact string.
-    monkeypatch.setattr(_core.utils, "prettify_unit_name_supers", lambda s, cancel=True: s, raising=True)
+    monkeypatch.setattr(utils, "prettify_unit_name_supers", lambda s, cancel=True: s, raising=True)
     # Ensure it would *try* to upgrade only when scale_to_si == 1.0; here it's 0.01, so no upgrade.
-    monkeypatch.setattr(_core.utils, "preferred_symbol_for_dim", lambda d: "m", raising=True)
+    monkeypatch.setattr(utils, "preferred_symbol_for_dim", lambda d: "m", raising=True)
 
     cm = Unit("cm", 0.01, LENGTH)
     q = 2 @ cm
@@ -422,7 +420,10 @@ def test_unit_equality_with_incompatible_type_returns_notimplemented():
 @pytest.mark.regression(reason="Quantities equal when SI magnitude and unit (by dim+scale) match")
 def test_quantity_equality_same_si_and_equivalent_units():
     # Build equivalent units with different names but same dim/scale
-    kg = ureg.get("kg"); m = ureg.get("m"); s = ureg.get("s"); N = ureg.get("N")
+    kg = ureg.get("kg")
+    m = ureg.get("m")
+    s = ureg.get("s")
+    N = ureg.get("N")
     unit_from_bases = kg * m / (s ** 2)   # equals N by dim+scale
 
     q1 = 10 @ N
@@ -469,7 +470,9 @@ def test_quantity_equality_with_incompatible_type_returns_notimplemented():
 @pytest.mark.regression(reason="Derived unit equality is stable across different build paths")
 def test_unit_equality_across_multiple_construction_paths():
     # (kg·m)/s^2 == (kg/s^2)·m == kg·(m/s^2)
-    kg = ureg.get("kg"); m = ureg.get("m"); s = ureg.get("s")
+    kg = ureg.get("kg")
+    m = ureg.get("m")
+    s = ureg.get("s")
     u1 = kg * m / (s ** 2)
     u2 = (kg / (s ** 2)) * m
     u3 = kg * (m / (s ** 2))

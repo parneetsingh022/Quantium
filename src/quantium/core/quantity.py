@@ -21,11 +21,12 @@ The system supports:
 
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from math import isfinite
-from quantium.core.dimensions import Dim, dim_div, dim_mul, dim_pow, DIM_0
-from quantium.core.utils import format_dim
 import re
+
+from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
 
 _POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
 
@@ -261,7 +262,7 @@ class Quantity:
     
     def __repr__(self) -> str:
         # Local imports avoid cyclic imports; modules are cached after the first time.
-        from quantium.core.utils import prettify_unit_name_supers, preferred_symbol_for_dim
+        from quantium.core.utils import preferred_symbol_for_dim, prettify_unit_name_supers
 
         # Always compute magnitude in the unit currently stored on the object
         mag = self._mag_si / self.unit.scale_to_si
