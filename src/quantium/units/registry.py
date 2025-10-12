@@ -22,16 +22,26 @@ Assumptions
 from __future__ import annotations
 
 from dataclasses import dataclass
-import threading
 import re
+import threading
+from typing import Dict, Iterable, List, Mapping, Optional, Tuple
 import unicodedata
-from typing import Dict, Iterable,  List, Mapping, Optional, Tuple
 
-from quantium.core.quantity import Unit
 from quantium.core.dimensions import (
-    LENGTH, MASS, TIME, CURRENT, TEMPERATURE, AMOUNT, LUMINOUS,DIM_0,
-    dim_mul, dim_div, dim_pow,
+    AMOUNT,
+    CURRENT,
+    DIM_0,
+    LENGTH,
+    LUMINOUS,
+    MASS,
+    TEMPERATURE,
+    TIME,
+    dim_div,
+    dim_mul,
+    dim_pow,
 )
+from quantium.core.quantity import Unit
+
 
 # ---------------------------------------------------------------------------
 # Prefix model

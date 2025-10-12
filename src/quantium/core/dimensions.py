@@ -44,11 +44,11 @@ LUMINOUS: Dim   = (0, 0, 0, 0, 0, 0, 1)
 
 def dim_mul(a: Dim, b: Dim) -> Dim:
     """Multiply dimensions (add exponents)."""
-    return tuple(x + y for x, y in zip(a, b))  # type: ignore
+    return tuple(x + y for x, y in zip(a, b, strict=False))  # type: ignore
 
 def dim_div(a: Dim, b: Dim) -> Dim:
     """Divide dimensions (subtract exponents)."""
-    return tuple(x - y for x, y in zip(a, b))  # type: ignore
+    return tuple(x - y for x, y in zip(a, b, strict=False))  # type: ignore
 
 def dim_pow(a: Dim, n: int) -> Dim:
     """Raise a dimension to an integer power."""
