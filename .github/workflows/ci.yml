@@ -47,9 +47,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: |
-          python -m pip install --upgrade pip
-          pip install bandit
+          python -m pip install -U pip bandit pip-audit
           bandit -r src -x tests
+          pip-audit -r requirements.txt || true
 
 
   # Test matrix across Python versions using tox
