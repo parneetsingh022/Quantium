@@ -6,10 +6,6 @@
 # instance for most tests, and monkeypatch DEFAULT_REGISTRY where needed.
 
 import threading
-import time
-import types
-import importlib
-import builtins
 import pytest
 
 from quantium.core.quantity import Unit

@@ -20,7 +20,6 @@ format_dim(dim: Dim) -> str
 
 """
 
-from quantium.core.dimensions import Dim
 # --- superscript + name-based prettifier (keeps units as written) ---
 import re
 from typing import Dict, Optional

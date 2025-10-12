@@ -32,3 +32,10 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["quantium*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "B", "I"]
+ignore = ["E203", "E266", "E501"]  # ignore long line errors etc.
+fix = true

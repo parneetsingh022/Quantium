@@ -187,7 +187,7 @@ class Quantity:
         (cm)   -> m
         """
         # Local imports avoid circular import at module load time.
-        from quantium.core.utils import format_dim, preferred_symbol_for_dim
+        from quantium.core.utils import preferred_symbol_for_dim
 
         # 1) Try a preferred named SI unit for this dimension (A, N, W, Pa, …)
         sym = preferred_symbol_for_dim(self.dim)  # returns e.g. "A", "N", "W", or None

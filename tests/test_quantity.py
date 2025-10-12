@@ -422,7 +422,10 @@ def test_unit_equality_with_incompatible_type_returns_notimplemented():
 @pytest.mark.regression(reason="Quantities equal when SI magnitude and unit (by dim+scale) match")
 def test_quantity_equality_same_si_and_equivalent_units():
     # Build equivalent units with different names but same dim/scale
-    kg = ureg.get("kg"); m = ureg.get("m"); s = ureg.get("s"); N = ureg.get("N")
+    kg = ureg.get("kg")
+    m = ureg.get("m")
+    s = ureg.get("s")
+    N = ureg.get("N")
     unit_from_bases = kg * m / (s ** 2)   # equals N by dim+scale
 
     q1 = 10 @ N
@@ -469,7 +472,9 @@ def test_quantity_equality_with_incompatible_type_returns_notimplemented():
 @pytest.mark.regression(reason="Derived unit equality is stable across different build paths")
 def test_unit_equality_across_multiple_construction_paths():
     # (kg·m)/s^2 == (kg/s^2)·m == kg·(m/s^2)
-    kg = ureg.get("kg"); m = ureg.get("m"); s = ureg.get("s")
+    kg = ureg.get("kg")
+    m = ureg.get("m")
+    s = ureg.get("s")
     u1 = kg * m / (s ** 2)
     u2 = (kg / (s ** 2)) * m
     u3 = kg * (m / (s ** 2))
