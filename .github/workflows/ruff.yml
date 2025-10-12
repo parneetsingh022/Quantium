@@ -1,4 +1,4 @@
-name: Ruff Lint
+name: Ruff + MyPy
 
 on:
   push:
@@ -8,19 +8,43 @@ on:
 
 jobs:
   ruff-lint:
+    name: Ruff Lint
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
-      - name: Install Ruff
+      - name: Install tools
         run: pip install ruff
 
-      - name: Run Ruff linter
+      - name: Ruff check
         run: ruff check .
+
+  mypy:
+    name: MyPy Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install tools
+        run: pip install mypy
+
+      # If your project needs local imports to type-check, uncomment:
+      # - name: Install project (optional)
+      #   run: pip install -e .
+
+      - name: MyPy
+        run: mypy src/quantium/

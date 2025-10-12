@@ -136,7 +136,7 @@ class UnitsRegistry:
         self._lock = threading.RLock()
         self._units: Dict[str, Unit] = {}
         self._aliases: Dict[str, str] = {}
-        self._non_prefixable : List[str] = []
+        self._non_prefixable: set[str] = set()
 
     def set_non_prefixable(self, symbols: Iterable[str]) -> None:
         """Mark unit symbols that must not accept SI prefixes (e.g., 'kg', 'min')."""

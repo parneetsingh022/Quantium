@@ -7,30 +7,43 @@ within the Quantium framework.
 
 This module provides helper functions for representing dimensional exponents
 and unit strings in a readable scientific format (e.g., 'kg·m/s²').
-
-Functions
----------
-_sup(n: int) -> str
-    Converts an integer exponent into its Unicode superscript representation.
-    Used for displaying powers in formatted unit strings (e.g., 'm²' or 's⁻¹').
-
-format_dim(dim: Dim) -> str
-    Converts a dimension tuple `(L, M, T, I, Θ, N, J)` into a conventional
-    formatted string like `'kg·m/s²'`, following standard SI notation.
-
 """
+
+from __future__ import annotations
 
 # --- superscript + name-based prettifier (keeps units as written) ---
 import re
-from typing import Dict, Optional
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Pattern,
+    Tuple,
+    cast,
+)
+
+from typing import cast
+
+# Backcompat for typing features if needed
+try:
+    from typing import Protocol, runtime_checkable, TypeAlias
+except Exception:  # pragma: no cover - for older Python
+    from typing_extensions import Protocol, runtime_checkable, TypeAlias
+
+# A dimension is a 7-tuple of integer exponents: (L, M, T, I, Θ, N, J)
+Dim: TypeAlias = Tuple[int, int, int, int, int, int, int]
 
 _SUPERSCRIPTS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
 
 def _sup(n: int) -> str:
     return "" if n == 1 else str(n).translate(_SUPERSCRIPTS)
 
+
 # match token like "cm", "s^2", "m^(2)", "kg^sup(3)", or with unicode superscripts "m²"
-_TOKEN_RE = re.compile(r"""
+_TOKEN_RE: Pattern[str] = re.compile(
+    r"""
     \s*
     (?P<sym>[^·/\s^]+)                    # base symbol up to separators
     (?:
@@ -41,9 +54,12 @@ _TOKEN_RE = re.compile(r"""
         (?P<usup>[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)          # or existing unicode superscripts
     )?
     \s*
-""", re.X)
+""",
+    re.X,
+)
 
-def _parse_exponent(m: re.Match) -> int:
+
+def _parse_exponent(m: re.Match[str]) -> int:
     e = m.group("exp1") or m.group("exp2")
     if e is not None:
         return int(e)
@@ -53,6 +69,7 @@ def _parse_exponent(m: re.Match) -> int:
         tbl = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻", "0123456789-")
         return int(us.translate(tbl) or "1")
     return 1
+
 
 def _tokenize_name_merge(name: str) -> Dict[str, int]:
     """Merge exponents from a composed unit name; cancel identical symbols.
@@ -66,7 +83,7 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
     name = name.replace("*", "·")
 
     parts = re.split(r"([·/])", name)  # keep separators
-    op = "·"                           # last operator seen; '·' or '/'
+    op = "·"  # last operator seen; '·' or '/'
     exps: Dict[str, int] = {}
 
     for tok in parts:
@@ -97,6 +114,7 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
     # Drop zeros
     return {k: v for k, v in exps.items() if v != 0}
 
+
 def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
     """
     Pretty-print using the *existing* unit symbols (no SI conversion).
@@ -106,16 +124,20 @@ def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
         # just restyle exponents to superscripts and normalize separators
         name = name.replace("*", "·")
         name = re.sub(r"\^sup\((-?\d+)\)", lambda m: _sup(int(m.group(1))), name)
-        name = re.sub(r"\^\((-?\d+)\)",     lambda m: _sup(int(m.group(1))), name)
-        name = re.sub(r"\^(-?\d+)",         lambda m: _sup(int(m.group(1))), name)
+        name = re.sub(r"\^\((-?\d+)\)", lambda m: _sup(int(m.group(1))), name)
+        name = re.sub(r"\^(-?\d+)", lambda m: _sup(int(m.group(1))), name)
         return name
 
     exps = _tokenize_name_merge(name)
 
-    num = sorted([(s, e) for s, e in exps.items() if e > 0], key=lambda x: x[0])
-    den = sorted([(s, -e) for s, e in exps.items() if e < 0], key=lambda x: x[0])
+    num: List[Tuple[str, int]] = sorted(
+        [(s, e) for s, e in exps.items() if e > 0], key=lambda x: x[0]
+    )
+    den: List[Tuple[str, int]] = sorted(
+        [(s, -e) for s, e in exps.items() if e < 0], key=lambda x: x[0]
+    )
 
-    def join(parts):
+    def join(parts: List[Tuple[str, int]]) -> str:
         if not parts:
             return "1"
         return "·".join(f"{s}{_sup(p)}" for s, p in parts)
@@ -126,15 +148,17 @@ def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
 
 
 # ---------- Dimension → pretty unit string ----------
-def format_dim(dim) -> str:
+def format_dim(dim: Dim) -> str:
     """
     Turn a dimension tuple (L,M,T,I,Θ,N,J) into 'kg·m/s²' style.
     Conventional order: M, L, T, I, Θ, N, J.
     """
-    labels = ["m", "kg", "s", "A", "K", "mol", "cd"]   # indices: L=0 M=1 T=2 I=3 Θ=4 N=5 J=6
-    order  = [1, 0, 2, 3, 4, 5, 6]                     # M, L, T, I, Θ, N, J  (fixed order)
+    # indices: L=0 M=1 T=2 I=3 Θ=4 N=5 J=6
+    labels: List[str] = ["m", "kg", "s", "A", "K", "mol", "cd"]
+    order: List[int] = [1, 0, 2, 3, 4, 5, 6]  # M, L, T, I, Θ, N, J  (fixed order)
 
-    num, den = [], []
+    num: List[str] = []
+    den: List[str] = []
     for i in order:
         e = dim[i]
         if e > 0:
@@ -142,40 +166,55 @@ def format_dim(dim) -> str:
         elif e < 0:
             den.append(labels[i] + _sup(-e))
 
-    numerator   = "·".join(num) if num else "1"
+    numerator = "·".join(num) if num else "1"
     denominator = "·".join(den)
     return f"{numerator}/{denominator}" if denominator else numerator
 
 
-def _dim_key(dim) -> tuple:
-    return tuple(dim)
+def _dim_key(dim: Dim) -> Dim:
+    return cast(Dim, tuple(dim))
 
-_PREFERRED_ORDER = [
-    "A", "C", "N", "Pa", "J", "W", "V", "Ω", "S", "F", "Wb", "T", "H",
-    "Hz", "lm", "lx", "Bq", "Gy", "Sv", "kat",
-    "rad", "sr",
-    "m", "kg", "s", "K", "mol", "cd",
-]
+
+_PREFERRED_ORDER = [ "A", "C", "N", "Pa", "J", "W", "V", "Ω", "S", "F", "Wb", "T", "H", "Hz", "lm", "lx", "Bq", "Gy", "Sv", "kat", "rad", "sr", "m", "kg", "s", "K", "mol", "cd", ]
+
+
+@runtime_checkable
+class _HasDimScale(Protocol):
+    """Protocol for registry unit entries with SI scale and a dimension."""
+
+    dim: Dim
+    scale_to_si: float
+
 
 # Build lazily (no import at module load)
-_PREFERRED_BY_DIM = None
+_PREFERRED_BY_DIM: Optional[Dict[Dim, str]] = None
 
-def _build_pref_map():
+
+def _build_pref_map() -> Dict[Dim, str]:
+    """
+    Build a dimension -> preferred symbol map from the default registry.
+    Only includes units whose scale to SI is exactly 1.0.
+    """
     # Local import avoids circular import at module import time
     from quantium.units.registry import DEFAULT_REGISTRY
-    pref = {}
+
+    pref: Dict[Dim, str] = {}
+    reg: Any = DEFAULT_REGISTRY  # registry type is not exposed; treat as Any
+
     for sym in _PREFERRED_ORDER:
-        u = DEFAULT_REGISTRY.get(sym)
+        u = cast(Optional[_HasDimScale], reg.get(sym))
         if u and getattr(u, "scale_to_si", None) == 1.0:
             pref[_dim_key(u.dim)] = sym
     return pref
 
-def preferred_symbol_for_dim(dim) -> Optional[str]:
+
+def preferred_symbol_for_dim(dim: Dim) -> Optional[str]:
     """Return the preferred symbol (e.g., 'A', 'N', 'W') for a dimension, or None."""
     global _PREFERRED_BY_DIM
     if _PREFERRED_BY_DIM is None:
         _PREFERRED_BY_DIM = _build_pref_map()
     return _PREFERRED_BY_DIM.get(_dim_key(dim))
+
 
 # Optional helper if you ever want to refresh after registering new units:
 def invalidate_preferred_cache() -> None:

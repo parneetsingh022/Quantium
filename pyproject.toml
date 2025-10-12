@@ -52,3 +52,20 @@ force-sort-within-sections = true
 [tool.ruff.format]
 quote-style = "preserve"
 indent-style = "space"
+
+
+[tool.mypy]
+# Enforce strong type checking
+strict = false
+
+# Ignore 3rd-party packages without type hints (e.g., numpy, etc.)
+ignore_missing_imports = true
+
+# Check your source directory
+files = ["quantium"]
+
+# Optional quality of life
+disallow_untyped_defs = true     # All functions must have type hints
+disallow_incomplete_defs = true  # No partial type hints
+warn_unused_ignores = true
+warn_return_any = true
