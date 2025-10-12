@@ -1,0 +1,14 @@
+version: 2
+updates:
+
+  - package-ecosystem: "pip"
+    directory: "/"                # where requirements.txt or pyproject.toml lives
+    schedule:
+      interval: "weekly"          # daily, weekly, or monthly
+    open-pull-requests-limit: 5
+    rebase-strategy: "auto"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

@@ -38,6 +38,19 @@ jobs:
       # Expects tox envs named "lint" (ruff) and "type" (mypy)
       - name: Run ruff & mypy via tox
         run: tox -e lint,type
+  security:
+    name: Security scan (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          python -m pip install -U pip bandit pip-audit
+          bandit -r src -x tests
+          pip-audit -r requirements.txt || true
+
 
   # Test matrix across Python versions using tox
   tests:
