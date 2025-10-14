@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added common time units (min, h, d, wk, fortnight, mo, yr, yr_julian, decade, century, millennium) with full alias support and SI-based scaling in `Default Registry`.
 
+- Added `.si` property to a quantity to convert any quantity to its respective SI unit.
+
+
 ## [0.0.1a0] - 2025-10-09
 ### Added
 - Initial alpha release of **Quantium**.

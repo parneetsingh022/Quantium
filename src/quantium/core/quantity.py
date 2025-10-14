@@ -184,7 +184,7 @@ class Quantity:
         return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
         
     
-    def to_si(self) -> "Quantity":
+    def to_si(self) -> Quantity:
         """
         Return an equivalent Quantity expressed in SI with a preferred symbol when possible.
         Examples:
@@ -207,6 +207,10 @@ class Quantity:
         si_name = format_dim(self.dim)             # e.g., "kg·m/s²", "m", "1"
         si_unit = Unit(si_name, 1.0, self.dim)
         return Quantity(self._mag_si, si_unit)
+    
+    @property
+    def si(self) -> Quantity:
+        return self.to_si()
 
     # arithmetic
     def __add__(self, other: Quantity) -> Quantity:
