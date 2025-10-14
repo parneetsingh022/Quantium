@@ -293,6 +293,44 @@ class Quantity:
             return f"{mag:g}"
         
         return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
+    
+    def __format__(self, spec: str) -> str:
+        """
+        Custom string formatting for Quantity objects.
+
+        The format specifier controls whether the quantity is shown in its
+        current unit or converted to SI units before printing.
+
+        Supported specifiers
+        --------------------
+        "" (empty), "unit", or "u"
+            Display the quantity in its current unit (default).
+        "si"
+            Display the quantity converted to SI units.
+
+        Examples
+        --------
+        >>> v = 1000 @ (ureg.get("cm") / ureg.get("s"))
+        >>> f"{v}"           # default: show in current unit (cm/s)
+        '1000 cm/s'
+        >>> f"{v:unit}"      # explicit but same as above
+        '1000 cm/s'
+        >>> f"{v:si}"        # convert and show in SI (m/s)
+        '10 m/s'
+
+        Raises
+        ------
+        ValueError
+            If the format specifier is not one of "", "unit", "u", or "si".
+        """
+        spec = (spec or "").strip().lower()
+        if spec in ("", "unit", "u"):
+            return repr(self)          # current unit (default)
+        if spec == "si":
+            return repr(self.to_si())  # force SI
+        raise ValueError("Unknown format spec; use '', 'unit', or 'si'")
+
+
 
 
         
