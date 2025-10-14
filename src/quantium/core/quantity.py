@@ -192,26 +192,41 @@ class Quantity:
     def to_si(self) -> Quantity:
         """
         Return an equivalent Quantity expressed in SI with a preferred symbol when possible.
-        Examples:
-        (C/s)  -> A
-        (kg·m/s²) -> N
-        (J/s)  -> W
-        (1/s)  -> Hz
-        (cm)   -> m
+        Strategy:
+        1) If the current unit clearly belongs to a specific SI family (atomic symbol with
+            scale 1, or a prefixed form of one), keep that family in SI (e.g., kBq → Bq).
+        2) Otherwise, use the dimension's preferred symbol (A, N, W, Pa, Hz, …).
+        3) If no preferred symbol exists, compose the base-SI name from the dimension.
         """
         # Local imports avoid circular import at module load time.
         from quantium.core.utils import format_dim, preferred_symbol_for_dim
+        from quantium.units.registry import DEFAULT_REGISTRY as _ureg
 
-        # 1) Try a preferred named SI unit for this dimension (A, N, W, Pa, …)
-        sym = preferred_symbol_for_dim(self.dim)  # returns e.g. "A", "N", "W", or None
+        cur_name = self.unit.name
+
+        # --- (1) Preserve the "family" if we can (Hz vs Bq, Gy vs Sv, …) ---
+        # Grab all atomic SI heads (scale==1, same dim) registered in the system.
+        si_heads = [name for name, u in _ureg.all().items()
+                    if u.scale_to_si == 1.0 and u.dim == self.dim]
+
+        # If our current unit is exactly one of those heads (e.g., "Bq"), or is a prefixed
+        # form ending with the head (e.g., "kBq"), keep that head as the SI symbol.
+        for head in si_heads:
+            if cur_name == head or cur_name.endswith(head):
+                si_unit = Unit(head, 1.0, self.dim)
+                return Quantity(self._mag_si, si_unit)  # already SI magnitude
+
+        # --- (2) Fall back to the global preferred symbol for this dimension ---
+        sym = preferred_symbol_for_dim(self.dim)  # e.g., "A", "N", "W", "Pa", "Hz", …
         if sym:
             si_unit = Unit(sym, 1.0, self.dim)
-            return Quantity(self._mag_si, si_unit) # _mag_si is already in SI
+            return Quantity(self._mag_si, si_unit)
 
-        # 2) Fall back to composed base-SI name for this dimension
-        si_name = format_dim(self.dim)             # e.g., "kg·m/s²", "m", "1"
+        # --- (3) Compose from base SI if no named symbol exists ---
+        si_name = format_dim(self.dim)  # e.g., "kg·m/s²", "1/s", "m"
         si_unit = Unit(si_name, 1.0, self.dim)
         return Quantity(self._mag_si, si_unit)
+
     
     @property
     def si(self) -> Quantity:

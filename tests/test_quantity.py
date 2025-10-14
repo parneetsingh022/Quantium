@@ -827,3 +827,95 @@ def test_format_invalid_spec_raises(monkeypatch):
     with pytest.raises(ValueError):
         _ = f"{q:unknown}"
 
+# -------------------------------
+# .si preserves correct SI family (Hz/Bq, Gy/Sv)
+# -------------------------------
+
+def test_si_preserves_family_for_time_inverse_and_dose(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    import quantium.core.utils as utils
+    utils.invalidate_preferred_cache()
+
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    Hz = ureg.get("Hz")
+    Bq = ureg.get("Bq")
+    Gy = ureg.get("Gy")
+    Sv = ureg.get("Sv")
+
+    kHz = ureg.get("kHz")
+    kBq = ureg.get("kBq")
+    kGy = ureg.get("kGy")
+    kSv = ureg.get("kSv")
+
+    # Sanity: original units print as-is
+    assert f"{100 @ Hz}" == "100 Hz"
+    assert f"{100 @ Bq}" == "100 Bq"
+    assert f"{100 @ Gy}" == "100 Gy"
+    assert f"{100 @ Sv}" == "100 Sv"
+
+    # Prefixed forms print as-is
+    assert f"{100 @ kHz}" == "100 kHz"
+    assert f"{100 @ kBq}" == "100 kBq"
+    assert f"{100 @ kGy}" == "100 kGy"
+    assert f"{100 @ kSv}" == "100 kSv"
+
+    # .si should preserve family heads (Hz↔Hz, Bq↔Bq, Gy↔Gy, Sv↔Sv)
+    assert f"{(100 @ kHz):si}" == "100000 Hz"
+    assert f"{(100 @ kBq):si}" == "100000 Bq"
+    assert f"{(100 @ kGy):si}" == "100000 Gy"
+    assert f"{(100 @ kSv):si}" == "100000 Sv"
+
+
+# -------------------------------
+# __repr__ should not flip atomic symbols but upgrade composed SI names
+# -------------------------------
+
+def test_repr_preserves_atomic_symbols_and_prefixed(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    # Atomic SI units stay unchanged
+    for sym in ("Hz", "Bq", "Gy", "Sv"):
+        u = ureg.get(sym)
+        assert f"{100 @ u}" == f"100 {sym}"
+
+    # Prefixed atomic SI units also stay unchanged
+    for sym in ("kHz", "kBq", "kGy", "kSv"):
+        u = ureg.get(sym)
+        assert f"{100 @ u}" == f"100 {sym}"
+
+
+def test_repr_upgrades_only_composed_si(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    import quantium.core.utils as utils
+    utils.invalidate_preferred_cache()
+
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    C = ureg.get("C")
+    s = ureg.get("s")
+    kg = ureg.get("kg")
+    m = ureg.get("m")
+
+    # C/s -> A (preferred symbol for electric current)
+    q_current = (1 @ C) / (1 @ s)
+    assert f"{q_current}" == "1 A"
+
+    # kg·m/s² -> N (preferred symbol for force)
+    # wrap s as a Quantity: (1 @ s) ** 2, not (s ** 2)
+    q_force = (2 @ kg) * (3 @ m) / ((1 @ s) ** 2)
+    assert f"{q_force}" == "6 N"
+
+
+
+def test_si_fallback_to_composed_when_no_named_symbol(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    import quantium.core.utils as utils
+    utils.invalidate_preferred_cache()
+
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    cm = ureg.get("cm")
+    s = ureg.get("s")
+
+    v = 1000 @ (cm / s)  # velocity: no named SI symbol
+    assert f"{v:si}" == "10 m/s"
