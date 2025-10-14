@@ -293,3 +293,123 @@ def test_all_derived_units_dimensions_and_scales(reg, sym, dim_expr, scale):
     u = reg.get(sym)
     assert u.dim == dim_expr
     assert u.scale_to_si == pytest.approx(scale)
+
+
+# ---------------------------------------------------------------------------
+# Time units: presence, dimensions, scales
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("sym, seconds", [
+    ("min",       60.0),
+    ("h",         60.0 * 60.0),
+    ("d",         24.0 * 60.0 * 60.0),
+    ("wk",        7.0 * 24.0 * 60.0 * 60.0),
+    ("fortnight", 14.0 * 24.0 * 60.0 * 60.0),
+
+    # Civil (Gregorian) average month/year
+    ("mo",        (365.2425 / 12.0) * 24.0 * 3600.0),
+    ("yr",        365.2425 * 24.0 * 3600.0),
+
+    # Astronomy
+    ("yr_julian", 365.25 * 24.0 * 3600.0),
+
+    # Longer spans (Gregorian-based)
+    ("decade",     10.0  * 365.2425 * 24.0 * 3600.0),
+    ("century",    100.0 * 365.2425 * 24.0 * 3600.0),
+    ("millennium", 1000.0* 365.2425 * 24.0 * 3600.0),
+])
+def test_time_units_present_and_scaled(reg, sym, seconds):
+    u = reg.get(sym)
+    assert isinstance(u, Unit)
+    assert u.dim == TIME
+    assert u.scale_to_si == pytest.approx(seconds)
+
+
+# ---------------------------------------------------------------------------
+# Time aliases
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("alias, canonical", [
+    # Common aliases (already have ohm in your tests, included here for completeness)
+    ("ohm", "Ω"),
+    ("Ohm", "Ω"),
+    ("OHM", "Ω"),
+
+    # Time aliases
+    ("minute", "min"),
+    ("minutes", "min"),
+    ("hr", "h"),
+    ("hour", "h"),
+    ("hours", "h"),
+    ("day", "d"),
+    ("days", "d"),
+    ("week", "wk"),
+    ("weeks", "wk"),
+    ("fortnights", "fortnight"),
+    ("month", "mo"),
+    ("months", "mo"),
+    ("year", "yr"),
+    ("years", "yr"),
+    ("annum", "yr"),
+    ("dec", "decade"),
+    ("decades", "decade"),
+    ("cent", "century"),
+    ("centuries", "century"),
+    ("millennia", "millennium"),
+])
+def test_time_aliases_map_to_canonical(reg, alias, canonical):
+    u_alias = reg.get(alias)
+    u_canon = reg.get(canonical)
+    # Should be the exact same Unit object
+    assert u_alias is u_canon
+
+
+# ---------------------------------------------------------------------------
+# Non-prefixable enforcement
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bad_sym", [
+    # The registry marks these as non-prefixable; any SI/metric prefix must fail.
+    "mkg", "kkg", "ukg",            # kg is non-prefixable (SI prefixes apply to gram, not kilogram)
+    "kmin", "µmin", "umin", "mmin",
+    "kh", "µh", "uh", "mh",
+    "kd", "µd", "ud", "md",
+    "kwk", "µwk", "uwk", "mwk",
+    "kfortnight", "µfortnight", "ufortnight", "mfortnight",
+    "kmo", "µmo", "umo", "mmo",
+    "kyr", "µyr", "uyr", "myr",
+    "kyr_julian", "µyr_julian", "uyr_julian", "myr_julian",
+    "kdecade", "µdecade", "udecade", "mdecade",
+    "kcentury", "µcentury", "ucentury", "mcentury",
+    "kmillennium", "µmillennium", "umillennium", "mmillennium",
+])
+def test_non_prefixable_time_units_reject_prefixes(reg, bad_sym):
+    with pytest.raises(ValueError):
+        reg.get(bad_sym)
+
+
+def test_non_prefixable_does_not_accidentally_create_units(reg):
+    # Ensure attempting to fetch a prefixed version did not pollute the registry
+    base_len = len(reg.all())
+    for bad in ["kyr", "umin", "kh", "kmo", "mkg"]:
+        with pytest.raises(ValueError):
+            reg.get(bad)
+    assert len(reg.all()) == base_len
+
+
+# ---------------------------------------------------------------------------
+# Sanity: prefix synthesis still works for prefixable time base 's'
+# (and remains disallowed for the added non-prefixable time units)
+# ---------------------------------------------------------------------------
+
+def test_seconds_still_prefixable_but_not_month_year(reg):
+    # Positive control: seconds *are* prefixable (already covered elsewhere, but we assert here for contrast)
+    ms = reg.get("ms")
+    s = reg.get("s")
+    assert ms.dim == s.dim
+    assert ms.scale_to_si == pytest.approx(1e-3)
+
+    # Negative controls: these are non-prefixable
+    for sym in ["kmo", "kyr", "µh"]:
+        with pytest.raises(ValueError):
+            reg.get(sym)
