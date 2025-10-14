@@ -43,7 +43,8 @@ def _sup(n: int) -> str:
 _TOKEN_RE: Pattern[str] = re.compile(
     r"""
     \s*
-    (?P<sym>[^·/\s^]+)                    # base symbol up to separators
+    # Exclude superscript digits (⁰¹²³⁴⁵⁶⁷⁸⁹) and superscript minus (⁻)
+    (?P<sym>[^·/\s^⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)
     (?:
         \^(\(?(?P<exp1>-?\d+)\)?          # ^2 or ^(2)
           |sup\((?P<exp2>-?\d+)\)         # ^sup(2)
@@ -55,6 +56,7 @@ _TOKEN_RE: Pattern[str] = re.compile(
 """,
     re.X,
 )
+
 
 
 def _parse_exponent(m: re.Match[str]) -> int:
