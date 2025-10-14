@@ -181,6 +181,11 @@ class Quantity:
     def to(self, new_unit: Unit) -> Quantity:
         if new_unit.dim != self.dim:
             raise TypeError("Dimension mismatch in conversion")
+        
+        #Avoid allocating when the unit is already equivalent (same dim and scale)
+        if new_unit == self.unit:  # same dim + scale_to_si within tolerance
+            return self
+        
         return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
         
     
@@ -247,7 +252,7 @@ class Quantity:
         new_unit = self.unit / other.unit
         if new_unit.dim == DIM_0:
             # dimensionless quantity has no name
-            new_unit = new_unit = Unit('', 1.0, DIM_0)
+            new_unit = Unit('', 1.0, DIM_0)
 
         return Quantity((self._mag_si / other._mag_si) / new_unit.scale_to_si, new_unit)
 
@@ -255,6 +260,7 @@ class Quantity:
         # scalar / quantity  -> returns Quantity with inverse dimension
         if not isinstance(other, (int, float)):
             return NotImplemented
+        
         new_dim = dim_div(DIM_0, self.dim)  # or dim_pow(self.dim, -1)
         new_unit_name = f"{1}/{self.unit.name}"
         new_scale = 1.0 / self.unit.scale_to_si
