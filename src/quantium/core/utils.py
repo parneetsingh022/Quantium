@@ -193,16 +193,15 @@ def _build_pref_map() -> Dict[Dim, str]:
     Build a dimension -> preferred symbol map from the default registry.
     Only includes units whose scale to SI is exactly 1.0.
     """
-    # Local import avoids circular import at module import time
     from quantium.units.registry import DEFAULT_REGISTRY
-
     pref: Dict[Dim, str] = {}
-    reg: Any = DEFAULT_REGISTRY  # registry type is not exposed; treat as Any
+    reg: Any = DEFAULT_REGISTRY
 
-    for sym in _PREFERRED_ORDER:
+    for sym in _PREFERRED_ORDER:                 # earlier = higher preference
         u = cast(Optional[_HasDimScale], reg.get(sym))
         if u and getattr(u, "scale_to_si", None) == 1.0:
-            pref[_dim_key(u.dim)] = sym
+            k = _dim_key(u.dim)
+            pref.setdefault(k, sym)              # do not overwrite if already set
     return pref
 
 

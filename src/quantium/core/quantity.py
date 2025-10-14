@@ -281,18 +281,21 @@ class Quantity:
         # Start from the user’s unit name (keeps cm/ms etc.), with superscripts and cancellation
         pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
 
-        # If this quantity’s *current unit* is exactly SI-scaled (factor 1),
-        # upgrade to a preferred *named* unit for this dimension (A, N, J, W, Pa, Hz, …)
-        # This turns 'C/s' -> 'A', 'kg·m/s²' -> 'N', 'J/s' -> 'W', etc.
+        # Only upgrade composed SI names (e.g., 'kg·m/s²', 'C/s') to a canonical symbol (e.g., 'N', 'A').
+        # Do NOT override atomic SI symbols (e.g., 'Pa', 'Hz', 'Bq', 'Sv').
         if self.unit.scale_to_si == 1.0:
-            sym = preferred_symbol_for_dim(self.dim)
-            if sym:
-                pretty = sym  # symbol only; mag stays the same because factor is 1.0
-        
+            name = self.unit.name  # use the original (not prettified) name to detect composition
+            is_composed = any(ch in name for ch in ('/', '·', '^'))
+            if is_composed:
+                sym = preferred_symbol_for_dim(self.dim)
+                if sym:
+                    pretty = sym  # symbol only; mag stays the same because factor is 1.0
+
         if self.dim == DIM_0:
             return f"{mag:g}"
-        
+
         return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
+
     
     def __format__(self, spec: str) -> str:
         """
