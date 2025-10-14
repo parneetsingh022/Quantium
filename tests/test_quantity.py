@@ -623,7 +623,6 @@ def test_dimensionless_ratio_avoids_float_drift():
 # -------------------------------
 
 def test_si_equivalent_to_to_si():
-    m = ureg.get("m")
     cm = ureg.get("cm")
 
     q = 123 @ cm        # 1.23 m in SI
