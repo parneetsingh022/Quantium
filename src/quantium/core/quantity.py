@@ -181,32 +181,56 @@ class Quantity:
     def to(self, new_unit: Unit) -> Quantity:
         if new_unit.dim != self.dim:
             raise TypeError("Dimension mismatch in conversion")
+        
+        #Avoid allocating when the unit is already equivalent (same dim and scale)
+        if new_unit == self.unit:  # same dim + scale_to_si within tolerance
+            return self
+        
         return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
         
     
-    def to_si(self) -> "Quantity":
+    def to_si(self) -> Quantity:
         """
         Return an equivalent Quantity expressed in SI with a preferred symbol when possible.
-        Examples:
-        (C/s)  -> A
-        (kg·m/s²) -> N
-        (J/s)  -> W
-        (1/s)  -> Hz
-        (cm)   -> m
+        Strategy:
+        1) If the current unit clearly belongs to a specific SI family (atomic symbol with
+            scale 1, or a prefixed form of one), keep that family in SI (e.g., kBq → Bq).
+        2) Otherwise, use the dimension's preferred symbol (A, N, W, Pa, Hz, …).
+        3) If no preferred symbol exists, compose the base-SI name from the dimension.
         """
         # Local imports avoid circular import at module load time.
         from quantium.core.utils import format_dim, preferred_symbol_for_dim
+        from quantium.units.registry import DEFAULT_REGISTRY as _ureg
 
-        # 1) Try a preferred named SI unit for this dimension (A, N, W, Pa, …)
-        sym = preferred_symbol_for_dim(self.dim)  # returns e.g. "A", "N", "W", or None
+        cur_name = self.unit.name
+
+        # --- (1) Preserve the "family" if we can (Hz vs Bq, Gy vs Sv, …) ---
+        # Grab all atomic SI heads (scale==1, same dim) registered in the system.
+        si_heads = [name for name, u in _ureg.all().items()
+                    if u.scale_to_si == 1.0 and u.dim == self.dim]
+
+        # If our current unit is exactly one of those heads (e.g., "Bq"), or is a prefixed
+        # form ending with the head (e.g., "kBq"), keep that head as the SI symbol.
+        for head in si_heads:
+            if cur_name == head or cur_name.endswith(head):
+                si_unit = Unit(head, 1.0, self.dim)
+                return Quantity(self._mag_si, si_unit)  # already SI magnitude
+
+        # --- (2) Fall back to the global preferred symbol for this dimension ---
+        sym = preferred_symbol_for_dim(self.dim)  # e.g., "A", "N", "W", "Pa", "Hz", …
         if sym:
             si_unit = Unit(sym, 1.0, self.dim)
-            return Quantity(self._mag_si, si_unit) # _mag_si is already in SI
+            return Quantity(self._mag_si, si_unit)
 
-        # 2) Fall back to composed base-SI name for this dimension
-        si_name = format_dim(self.dim)             # e.g., "kg·m/s²", "m", "1"
+        # --- (3) Compose from base SI if no named symbol exists ---
+        si_name = format_dim(self.dim)  # e.g., "kg·m/s²", "1/s", "m"
         si_unit = Unit(si_name, 1.0, self.dim)
         return Quantity(self._mag_si, si_unit)
+
+    
+    @property
+    def si(self) -> Quantity:
+        return self.to_si()
 
     # arithmetic
     def __add__(self, other: Quantity) -> Quantity:
@@ -243,7 +267,7 @@ class Quantity:
         new_unit = self.unit / other.unit
         if new_unit.dim == DIM_0:
             # dimensionless quantity has no name
-            new_unit = new_unit = Unit('', 1.0, DIM_0)
+            new_unit = Unit('', 1.0, DIM_0)
 
         return Quantity((self._mag_si / other._mag_si) / new_unit.scale_to_si, new_unit)
 
@@ -251,6 +275,7 @@ class Quantity:
         # scalar / quantity  -> returns Quantity with inverse dimension
         if not isinstance(other, (int, float)):
             return NotImplemented
+        
         new_dim = dim_div(DIM_0, self.dim)  # or dim_pow(self.dim, -1)
         new_unit_name = f"{1}/{self.unit.name}"
         new_scale = 1.0 / self.unit.scale_to_si
@@ -271,18 +296,59 @@ class Quantity:
         # Start from the user’s unit name (keeps cm/ms etc.), with superscripts and cancellation
         pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
 
-        # If this quantity’s *current unit* is exactly SI-scaled (factor 1),
-        # upgrade to a preferred *named* unit for this dimension (A, N, J, W, Pa, Hz, …)
-        # This turns 'C/s' -> 'A', 'kg·m/s²' -> 'N', 'J/s' -> 'W', etc.
+        # Only upgrade composed SI names (e.g., 'kg·m/s²', 'C/s') to a canonical symbol (e.g., 'N', 'A').
+        # Do NOT override atomic SI symbols (e.g., 'Pa', 'Hz', 'Bq', 'Sv').
         if self.unit.scale_to_si == 1.0:
-            sym = preferred_symbol_for_dim(self.dim)
-            if sym:
-                pretty = sym  # symbol only; mag stays the same because factor is 1.0
-        
+            name = self.unit.name  # use the original (not prettified) name to detect composition
+            is_composed = any(ch in name for ch in ('/', '·', '^'))
+            if is_composed:
+                sym = preferred_symbol_for_dim(self.dim)
+                if sym:
+                    pretty = sym  # symbol only; mag stays the same because factor is 1.0
+
         if self.dim == DIM_0:
             return f"{mag:g}"
-        
+
         return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
+
+    
+    def __format__(self, spec: str) -> str:
+        """
+        Custom string formatting for Quantity objects.
+
+        The format specifier controls whether the quantity is shown in its
+        current unit or converted to SI units before printing.
+
+        Supported specifiers
+        --------------------
+        "" (empty), "unit", or "u"
+            Display the quantity in its current unit (default).
+        "si"
+            Display the quantity converted to SI units.
+
+        Examples
+        --------
+        >>> v = 1000 @ (ureg.get("cm") / ureg.get("s"))
+        >>> f"{v}"           # default: show in current unit (cm/s)
+        '1000 cm/s'
+        >>> f"{v:unit}"      # explicit but same as above
+        '1000 cm/s'
+        >>> f"{v:si}"        # convert and show in SI (m/s)
+        '10 m/s'
+
+        Raises
+        ------
+        ValueError
+            If the format specifier is not one of "", "unit", "u", or "si".
+        """
+        spec = (spec or "").strip().lower()
+        if spec in ("", "unit", "u"):
+            return repr(self)          # current unit (default)
+        if spec == "si":
+            return repr(self.to_si())  # force SI
+        raise ValueError("Unknown format spec; use '', 'unit', or 'si'")
+
+
 
 
         

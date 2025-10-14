@@ -617,3 +617,305 @@ def test_dimensionless_ratio_avoids_float_drift():
     # If repr prints a bare number for dimensionless quantities, cast to float safely:
     val = float(repr(r))
     assert val == pytest.approx(1.0, rel=1e-12, abs=1e-15)
+
+# -------------------------------
+# .si property
+# -------------------------------
+
+def test_si_equivalent_to_to_si():
+    cm = ureg.get("cm")
+
+    q = 123 @ cm        # 1.23 m in SI
+    q_si = q.si
+    q_to_si = q.to_si()
+
+    # Same dim and SI scale
+    assert q_si.unit.scale_to_si == 1.0
+    assert q_si.dim == q_to_si.dim
+    assert q_si.unit == q_to_si.unit
+    assert math.isclose(q_si._mag_si, q_to_si._mag_si, rel_tol=1e-12, abs_tol=0.0)
+
+
+def test_si_uses_preferred_symbol_when_available(monkeypatch):
+    # Arrange: make preferred_symbol_for_dim return a symbol for LENGTH
+    import quantium.core.utils as utils
+
+    def fake_preferred(dim):
+        return "m" if dim == LENGTH else None
+
+    def fake_format(dim):
+        return "LENGTH?"  # should not be used in this test
+
+    monkeypatch.setattr(utils, "preferred_symbol_for_dim", fake_preferred, raising=True)
+    monkeypatch.setattr(utils, "format_dim", fake_format, raising=True)
+
+    cm = ureg.get("cm")
+    q_si = (123 @ cm).si  # 1.23 m
+
+    assert isinstance(q_si, Quantity)
+    assert q_si.unit.name == "m"         # preferred symbol chosen
+    assert q_si.unit.scale_to_si == 1.0  # SI unit
+    assert math.isclose(q_si._mag_si, 1.23)
+
+
+def test_si_fallbacks_to_formatted_dim_when_no_symbol(monkeypatch):
+    import quantium.core.utils as utils
+
+    def fake_preferred(dim):
+        return None  # force fallback
+
+    def fake_format(dim):
+        # composed SI name for velocity
+        return "m/s" if dim == dim_div(LENGTH, TIME) else "1"
+
+    monkeypatch.setattr(utils, "preferred_symbol_for_dim", fake_preferred, raising=True)
+    monkeypatch.setattr(utils, "format_dim", fake_format, raising=True)
+
+    m = ureg.get("m")
+    s = ureg.get("s")
+    q = ((5 @ m) / (2 @ s)).si  # 2.5 m/s
+
+    assert q.unit.name == "m/s"
+    assert q.unit.scale_to_si == 1.0
+    assert math.isclose(q._mag_si, 2.5)
+
+
+def test_si_does_not_mutate_original_quantity():
+    cm = ureg.get("cm")
+    ms = ureg.get("ms")
+
+    v = 1000 @ (cm / ms)  # original in cm/ms
+    v_si = v.si           # 10000 m/s
+
+    # original unchanged
+    assert v.unit == (cm / ms)
+    # new object is SI
+    assert v_si.unit.scale_to_si == 1.0
+    assert math.isclose(v_si._mag_si, 10000.0)
+
+
+def test_si_repr_respects_preferred_symbol_when_scale_is_1(monkeypatch):
+    # Ensure repr of q.si upgrades to the preferred symbol (since SI scale is 1.0)
+    import quantium.core.utils as utils
+
+    # prettifier passthrough to assert exact string
+    monkeypatch.setattr(utils, "prettify_unit_name_supers", lambda s, cancel=True: s, raising=True)
+    # preferred symbol for LENGTH is "m"
+    monkeypatch.setattr(utils, "preferred_symbol_for_dim", lambda d: "m" if d == LENGTH else None, raising=True)
+
+    cm = ureg.get("cm")
+    q_si = (123 @ cm).si  # 1.23 m in SI
+    assert repr(q_si) == "1.23 m"
+
+
+# -------------------------------
+# __format__: formatting specs (broad coverage)
+# -------------------------------
+
+def _nop_prettifier(monkeypatch):
+    """Disable superscripts/cancellation so __repr__/__format__ are predictable."""
+    import quantium.core.utils as utils
+    monkeypatch.setattr(utils, "prettify_unit_name_supers", lambda s, cancel=True: s, raising=True)
+
+
+def test_format_equivalents_across_units(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    cm = ureg.get("cm")
+    s  = ureg.get("s")
+    kPa = ureg.get("kPa")
+    ohm = ureg.get("ohm")  # alias -> Ω
+    min_ = ureg.get("min")
+
+    # 1) Velocity in non-SI (cm/s)
+    v = 250 @ (cm / s)
+    assert f"{v}" == "250 cm/s"
+    assert f"{v:unit}" == "250 cm/s"
+    assert f"{v:u}" == "250 cm/s"
+
+    # 2) Pressure with prefix (kPa)
+    p = 2 @ kPa
+    assert f"{p}" == "2 kPa"
+    assert f"{p:unit}" == "2 kPa"
+
+    # 3) Alias normalization (ohm → Ω)
+    r = 5 @ ohm
+    assert f"{r}" == "5 Ω"
+    assert f"{r:unit}" == "5 Ω"
+
+    # 4) Mixed time unit in denominator (m/min)
+    speed = 120 @ (ureg.get("m") / min_)
+    assert f"{speed}" == "120 m/min"
+    assert f"{speed:unit}" == "120 m/min"
+
+
+def test_format_si_converts_various_units(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    cm = ureg.get("cm")
+    s  = ureg.get("s")
+    kPa = ureg.get("kPa")
+    min_ = ureg.get("min")
+
+    # 1) 1000 cm/s -> 10 m/s
+    v = 1000 @ (cm / s)
+    assert f"{v:si}" == "10 m/s"
+
+    # 2) 2 kPa -> 2000 Pa
+    p = 2 @ kPa
+    assert f"{p:si}" == "2000 Pa"
+
+    # 3) 120 m/min -> 2 m/s (since 1 min = 60 s)
+    speed = 120 @ (ureg.get("m") / min_)
+    assert f"{speed:si}" == "2 m/s"
+
+    # 4) Frequency with prefix: 2 kHz -> 2000 Hz
+    kHz = ureg.get("kHz")
+    f = 2 @ kHz
+    assert f"{f:si}" == "2000 Hz"
+
+
+def test_format_with_micro_and_normalization(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    # Leading 'u' maps to Greek micro 'µ' during lookup/registration
+    uF = ureg.get("uF")     # normalized to µF internally
+    q = 3 @ uF
+    # Current unit uses the canonical symbol
+    assert f"{q}" == "3 µF"
+    # SI format converts to base Farads (3e-06 F)
+    assert f"{q:si}" == "3e-06 F"
+
+
+def test_format_whitespace_and_case_insensitivity(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    cm = ureg.get("cm")
+    s  = ureg.get("s")
+    v = 1000 @ (cm / s)  # 10 m/s in SI
+
+    # Varied spacing/casing should still resolve to SI
+    assert f"{v: SI }" == "10 m/s"
+    assert f"{v:Si}" == "10 m/s"
+    assert f"{v:  sI}" == "10 m/s"
+
+
+def test_format_dimensionless_is_numeric_only(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    # Dimensionless via equal ratio (kPa / Pa)
+    kPa = ureg.get("kPa")
+    Pa  = ureg.get("Pa")
+
+    q = (3 @ kPa) / (3000 @ Pa)  # equals 1 (dimensionless)
+    assert f"{q}" == "1"
+    assert f"{q:unit}" == "1"
+    assert f"{q:si}" == "1"
+
+
+def test_format_invalid_spec_raises(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    m = ureg.get("m")
+    q = 3 @ m
+    with pytest.raises(ValueError):
+        _ = f"{q:unknown}"
+
+# -------------------------------
+# .si preserves correct SI family (Hz/Bq, Gy/Sv)
+# -------------------------------
+
+def test_si_preserves_family_for_time_inverse_and_dose(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    import quantium.core.utils as utils
+    utils.invalidate_preferred_cache()
+
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    Hz = ureg.get("Hz")
+    Bq = ureg.get("Bq")
+    Gy = ureg.get("Gy")
+    Sv = ureg.get("Sv")
+
+    kHz = ureg.get("kHz")
+    kBq = ureg.get("kBq")
+    kGy = ureg.get("kGy")
+    kSv = ureg.get("kSv")
+
+    # Sanity: original units print as-is
+    assert f"{100 @ Hz}" == "100 Hz"
+    assert f"{100 @ Bq}" == "100 Bq"
+    assert f"{100 @ Gy}" == "100 Gy"
+    assert f"{100 @ Sv}" == "100 Sv"
+
+    # Prefixed forms print as-is
+    assert f"{100 @ kHz}" == "100 kHz"
+    assert f"{100 @ kBq}" == "100 kBq"
+    assert f"{100 @ kGy}" == "100 kGy"
+    assert f"{100 @ kSv}" == "100 kSv"
+
+    # .si should preserve family heads (Hz↔Hz, Bq↔Bq, Gy↔Gy, Sv↔Sv)
+    assert f"{(100 @ kHz):si}" == "100000 Hz"
+    assert f"{(100 @ kBq):si}" == "100000 Bq"
+    assert f"{(100 @ kGy):si}" == "100000 Gy"
+    assert f"{(100 @ kSv):si}" == "100000 Sv"
+
+
+# -------------------------------
+# __repr__ should not flip atomic symbols but upgrade composed SI names
+# -------------------------------
+
+def test_repr_preserves_atomic_symbols_and_prefixed(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    # Atomic SI units stay unchanged
+    for sym in ("Hz", "Bq", "Gy", "Sv"):
+        u = ureg.get(sym)
+        assert f"{100 @ u}" == f"100 {sym}"
+
+    # Prefixed atomic SI units also stay unchanged
+    for sym in ("kHz", "kBq", "kGy", "kSv"):
+        u = ureg.get(sym)
+        assert f"{100 @ u}" == f"100 {sym}"
+
+
+def test_repr_upgrades_only_composed_si(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    import quantium.core.utils as utils
+    utils.invalidate_preferred_cache()
+
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    C = ureg.get("C")
+    s = ureg.get("s")
+    kg = ureg.get("kg")
+    m = ureg.get("m")
+
+    # C/s -> A (preferred symbol for electric current)
+    q_current = (1 @ C) / (1 @ s)
+    assert f"{q_current}" == "1 A"
+
+    # kg·m/s² -> N (preferred symbol for force)
+    # wrap s as a Quantity: (1 @ s) ** 2, not (s ** 2)
+    q_force = (2 @ kg) * (3 @ m) / ((1 @ s) ** 2)
+    assert f"{q_force}" == "6 N"
+
+
+
+def test_si_fallback_to_composed_when_no_named_symbol(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    import quantium.core.utils as utils
+    utils.invalidate_preferred_cache()
+
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    cm = ureg.get("cm")
+    s = ureg.get("s")
+
+    v = 1000 @ (cm / s)  # velocity: no named SI symbol
+    assert f"{v:si}" == "10 m/s"

@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added common time units (min, h, d, wk, fortnight, mo, yr, yr_julian, decade, century, millennium) with full alias support and SI-based scaling in `Default Registry`.
 
+- Added `.si` property to a quantity to convert any quantity to its respective SI unit.
+
+- Added support for formatted string output of quantities using the `__format__` method.  
+  Quantities can now be printed in their current or SI units directly in f-strings:  
+  - `f"{q}"` or `f"{q:unit}"` → displays the quantity in its current unit.  
+  - `f"{q:si}"` → displays the quantity converted to SI units.  
+  This provides a cleaner and more Pythonic way to print quantities without calling `.to_si()` manually.
+
+
 ## [0.0.1a0] - 2025-10-09
 ### Added
 - Initial alpha release of **Quantium**.
