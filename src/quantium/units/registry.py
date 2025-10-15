@@ -338,7 +338,6 @@ DEFAULT_REGISTRY: UnitsRegistry = _bootstrap_default_registry()
 
 
 __all__ = [
-    "Prefix",
     "UnitsRegistry",
     "DEFAULT_REGISTRY",
 ]
