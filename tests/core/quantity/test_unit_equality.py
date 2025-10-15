@@ -1,0 +1,73 @@
+from dataclasses import FrozenInstanceError
+import pytest
+
+from quantium.core.dimensions import LENGTH, TIME
+from quantium.core.quantity import Unit
+from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+
+
+# -------------------------------
+# Unit equality (regressions)
+# -------------------------------
+
+@pytest.mark.regression(reason="Issue #24: Units with identical dim & scale must compare equal regardless of name")
+def test_unit_equality_ignores_name_and_matches_scale_and_dim():
+    # Construct Newton from base units and compare with predefined "N"
+    kg = ureg.get("kg")
+    m  = ureg.get("m")
+    s  = ureg.get("s")
+    N1 = kg * m / (s ** 2)   # name "kg·m/s^2", scale 1.0, dim (1,1,-2,0,0,0,0)
+    N2 = ureg.get("N")       # name "N",         scale 1.0, dim (1,1,-2,0,0,0,0)
+
+    assert N1 == N2
+    # Sanity: names may differ but equality should be based on dim+scale only
+    assert N1.name != N2.name
+    assert N1.scale_to_si == N2.scale_to_si
+    assert N1.dim == N2.dim
+
+
+@pytest.mark.regression(reason="Units with different scales are not equal even if dimensions match")
+def test_unit_inequality_different_scale_same_dim():
+    m  = Unit("m", 1.0, LENGTH)
+    cm = Unit("cm", 0.01, LENGTH)
+    assert m != cm
+
+
+@pytest.mark.regression(reason="Units with different dimensions are not equal even if scales match")
+def test_unit_inequality_different_dim_same_scale():
+    # scale 1.0 but different dimensions (LENGTH vs TIME)
+    m = Unit("m", 1.0, LENGTH)
+    s = Unit("s", 1.0, TIME)
+    assert m != s
+
+
+@pytest.mark.regression(reason="__eq__ should return NotImplemented for incompatible types")
+def test_unit_equality_with_incompatible_type_returns_notimplemented():
+    m = Unit("m", 1.0, LENGTH)
+    # Direct dunder call to observe NotImplemented (== would coerce to False)
+    assert Unit.__eq__(m, 42) is NotImplemented
+    assert (m == 42) is False
+
+
+@pytest.mark.regression(reason="Name differences never drive equality; only scale & dim")
+def test_unit_name_changes_do_not_affect_equality():
+    m = Unit("m", 1.0, LENGTH)
+    m_alias = m.as_name("meter")
+    assert m_alias.name != m.name
+    assert m_alias == m
+
+# -------------------------------
+# Mixed constructions (extra safety)
+# -------------------------------
+
+@pytest.mark.regression(reason="Derived unit equality is stable across different build paths")
+def test_unit_equality_across_multiple_construction_paths():
+    # (kg·m)/s^2 == (kg/s^2)·m == kg·(m/s^2)
+    kg = ureg.get("kg")
+    m = ureg.get("m")
+    s = ureg.get("s")
+    u1 = kg * m / (s ** 2)
+    u2 = (kg / (s ** 2)) * m
+    u3 = kg * (m / (s ** 2))
+    assert u1 == u2 == u3
