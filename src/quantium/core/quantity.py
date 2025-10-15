@@ -89,12 +89,24 @@ class Unit:
     def __rmatmul__(self, value: float) -> Quantity:
         return Quantity(float(value), self)
     
-    def __mul__(self, other : Unit) -> Unit:
+    def __mul__(self, other: "Unit") -> "Unit":
         new_dim = dim_mul(self.dim, other.dim)
-        # compose unit name and scale
-        new_unit_name = f"{self.name}·{other.name}"
         new_scale = self.scale_to_si * other.scale_to_si
+
+        # If the two units are equivalent (same dim and scale), collapse to a power.
+        # This avoids "K·kelvin" and produces "kelvin^2" (or "K^2" if the LHS was "K").
+        if (
+            self.dim == other.dim
+            and isclose(self.scale_to_si, other.scale_to_si, rel_tol=1e-12, abs_tol=0.0)
+        ):
+            base_name = self.name if self.name else other.name
+            new_unit_name = _normalize_power_name(f"{base_name}^2")
+            return Unit(new_unit_name, new_scale, new_dim)
+
+        # Otherwise compose normally.
+        new_unit_name = f"{self.name}·{other.name}"
         return Unit(new_unit_name, new_scale, new_dim)
+
 
     def __truediv__(self, other : Unit) -> Unit:
         new_dim = dim_div(self.dim, other.dim)
