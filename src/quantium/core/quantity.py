@@ -250,6 +250,12 @@ class Quantity:
         if isinstance(other, (int, float)):
             return Quantity((self._mag_si * float(other)) / self.unit.scale_to_si, self.unit)
 
+        # quantity × unit
+        if isinstance(other, Unit):
+            new_unit = self.unit * other
+
+            return Quantity(self._mag_si, new_unit)
+        
         # quantity × quantity
         new_unit = self.unit * other.unit
         # convert SI magnitude back to the composed unit
@@ -263,6 +269,12 @@ class Quantity:
         # quantity / scalar
         if isinstance(other, (int, float)):
             return Quantity((self._mag_si / float(other)) / self.unit.scale_to_si, self.unit)
+        
+        # quantity / unit
+        if isinstance(other, Unit):
+            new_unit = self.unit / other
+
+            return Quantity(self._mag_si, new_unit)
 
         # quantity / quantity
         new_unit = self.unit / other.unit
