@@ -1,8 +1,8 @@
 import math
 import pytest
-from quantium.core.dimensions import LENGTH, TEMPERATURE
+from quantium.core.dimensions import LENGTH, TEMPERATURE,TIME, DIM_0
 from quantium.core.quantity import Quantity, Unit
-
+from quantium.units.registry import DEFAULT_REGISTRY as dreg
 # -------------------------------
 # Quantity: basics & conversion
 # -------------------------------
@@ -41,3 +41,85 @@ def test_rmatmul_operator():
     assert q.dim == LENGTH
     assert q.unit is m
     assert math.isclose(q._mag_si, 3.0)
+
+
+# -------------------------------
+# quantity as_name()
+# -------------------------------
+
+def test_quantity_has_as_name_and_returns_quantity():
+    K = dreg.get("K")
+    q = 100 @ K
+
+    out = q.as_name("kelvin")
+
+    assert isinstance(out, Quantity)
+    assert out is not q  # returns a new object
+    assert out.unit.name == "kelvin"
+    # same SI magnitude and same dimension
+    assert math.isclose(out._mag_si, q._mag_si)
+    assert out.dim == q.dim
+    # unit scale and dim unchanged; only the name should differ
+    assert math.isclose(out.unit.scale_to_si, q.unit.scale_to_si)
+    assert out.unit.dim == q.unit.dim
+
+
+def test_quantity_as_name_does_not_mutate_original():
+    m = Unit("m", 1.0, LENGTH)
+    q = 5 @ m
+
+    out = q.as_name("meter")
+
+    # original untouched
+    assert q.unit.name == "m"
+    assert math.isclose(q._mag_si, 5.0)
+    # new has the new name
+    assert out.unit.name == "meter"
+    # values/dims consistent
+    assert math.isclose(out._mag_si, 5.0)
+    assert out.dim == LENGTH
+
+
+def test_quantity_as_name_works_with_registry_kelvin_repr():
+    K = dreg.get("K")
+    q = (100 @ K).as_name("kelvin")
+    # repr should reflect the new unit name
+    assert repr(q) == "100 kelvin"
+
+
+def test_quantity_as_name_on_composed_quantity_preserves_scale_and_value():
+    m = Unit("m", 1.0, LENGTH)
+    q = (2 @ m) * (3 @ m)   # 6 m·m (your Unit.__mul__ may collapse to m^2)
+    shown_before = q._mag_si / q.unit.scale_to_si
+
+    out = q.as_name("area")
+    shown_after = out._mag_si / out.unit.scale_to_si
+
+    # Only the unit name changes
+    assert out.unit.name == "area"
+    assert math.isclose(out.unit.scale_to_si, q.unit.scale_to_si)
+    assert out.unit.dim == q.unit.dim
+    # magnitude shown to users remains identical
+    assert math.isclose(shown_after, shown_before)
+    # repr matches the new name
+    assert repr(out) == f"{shown_before:g} area"
+
+
+def test_quantity_as_name_chainable():
+    K = dreg.get("K")
+    q = (100 @ K).as_name("kelvin").as_name("K")
+    assert q.unit.name == "K"
+    assert repr(q) == "100 K"
+
+
+def test_quantity_as_name_on_dimensionless_is_allowed():
+    # Create a dimensionless quantity by dividing equivalent units
+    s = Unit("s", 1.0, TIME)
+    q = (10 @ s) / (2 @ s)  # -> 5 (dimensionless)
+    assert q.dim == DIM_0
+
+    out = q.as_name("1")  # rename the unit label for display
+    assert out.dim == DIM_0
+    assert out.unit.name == "1"
+    assert math.isclose(out._mag_si, q._mag_si)
+    assert repr(out) == "5"

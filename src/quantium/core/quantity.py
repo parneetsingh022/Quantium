@@ -240,7 +240,10 @@ class Quantity:
         si_unit = Unit(si_name, 1.0, self.dim)
         return Quantity(self._mag_si, si_unit)
 
-    
+    def as_name(self, name: str) -> Quantity:
+        """Return a copy of this quantity with the same value and dimension but a new unit name."""
+        return Quantity(self._mag_si, self.unit.as_name(name))
+
     @property
     def si(self) -> Quantity:
         return self.to_si()
