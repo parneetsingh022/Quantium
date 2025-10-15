@@ -27,6 +27,7 @@ from math import isclose, isfinite
 import re
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
+from quantium.units.prefixes import PREFIXES
 
 _POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
 
@@ -289,27 +290,43 @@ class Quantity:
     def __repr__(self) -> str:
         # Local imports avoid cyclic imports; modules are cached after the first time.
         from quantium.core.utils import preferred_symbol_for_dim, prettify_unit_name_supers
+        from quantium.units.registry import PREFIXES
 
-        # Always compute magnitude in the unit currently stored on the object
+        # Numeric magnitude in the *current* unit
         mag = self._mag_si / self.unit.scale_to_si
 
-        # Start from the user’s unit name (keeps cm/ms etc.), with superscripts and cancellation
+        # Start from the user’s unit name (keeps cm/ms etc.), with superscripts & cancellation
         pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
 
-        # Only upgrade composed SI names (e.g., 'kg·m/s²', 'C/s') to a canonical symbol (e.g., 'N', 'A').
-        # Do NOT override atomic SI symbols (e.g., 'Pa', 'Hz', 'Bq', 'Sv').
-        if self.unit.scale_to_si == 1.0:
-            name = self.unit.name  # use the original (not prettified) name to detect composition
-            is_composed = any(ch in name for ch in ('/', '·', '^'))
-            if is_composed:
-                sym = preferred_symbol_for_dim(self.dim)
-                if sym:
-                    pretty = sym  # symbol only; mag stays the same because factor is 1.0
-
+        # Dimensionless: print bare number
         if self.dim == DIM_0:
             return f"{mag:g}"
 
+        # Only consider upgrading when the current unit *looks composed*.
+        # We do NOT override atomic SI symbols like Pa, Hz, Bq, Gy, Sv, ...
+        name_raw = self.unit.name  # use original to detect composition
+        is_composed = any(ch in name_raw for ch in ('/', '·', '^'))
+
+        if is_composed:
+            sym = preferred_symbol_for_dim(self.dim)  # e.g., "N", "A", "W", "Pa", "Hz", ...
+            if sym:
+                scale = self.unit.scale_to_si
+
+                # Exact SI scale -> upgrade to the canonical symbol (e.g., "N")
+                if abs(scale - 1.0) <= 1e-12:
+                    pretty = sym
+                else:
+                    # If the composed unit's total scale matches an SI prefix,
+                    # print as <prefix><symbol> (e.g., 1e-6 -> "µN")
+                    for p in PREFIXES:
+                        if abs(scale - p.factor) <= 1e-12:
+                            pretty = f"{p.symbol}{sym}"
+                            break
+                    # else: keep the composed pretty name as-is
+
+        # If the pretty name reduces to "1", show just the number
         return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
+
 
     
     def __format__(self, spec: str) -> str:

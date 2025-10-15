@@ -7,6 +7,11 @@ from quantium.core.dimensions import DIM_0, LENGTH, TEMPERATURE, TIME, dim_div, 
 from quantium.core.quantity import Quantity, Unit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
 
+def _nop_prettifier(monkeypatch):
+    """Disable superscripts/cancellation so __repr__/__format__ are predictable."""
+    import quantium.core.utils as utils
+    monkeypatch.setattr(utils, "prettify_unit_name_supers", lambda s, cancel=True: s, raising=True)
+
 # -------------------------------
 # Unit: construction & validation
 # -------------------------------
@@ -712,11 +717,6 @@ def test_si_repr_respects_preferred_symbol_when_scale_is_1(monkeypatch):
 # __format__: formatting specs (broad coverage)
 # -------------------------------
 
-def _nop_prettifier(monkeypatch):
-    """Disable superscripts/cancellation so __repr__/__format__ are predictable."""
-    import quantium.core.utils as utils
-    monkeypatch.setattr(utils, "prettify_unit_name_supers", lambda s, cancel=True: s, raising=True)
-
 
 def test_format_equivalents_across_units(monkeypatch):
     _nop_prettifier(monkeypatch)
@@ -919,3 +919,128 @@ def test_si_fallback_to_composed_when_no_named_symbol(monkeypatch):
 
     v = 1000 @ (cm / s)  # velocity: no named SI symbol
     assert f"{v:si}" == "10 m/s"
+
+
+def test_force_micro_and_kilo_newton(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    mg = ureg.get("mg")    # 1e-6 kg
+    um = ureg.get("µm")    # 1e-6 m
+    ms = ureg.get("ms")    # 1e-3 s
+    # mg·µm/ms² -> (1e-6*1e-6)/(1e-6) = 1e-6 -> µN
+    q_micro = 1 @ (mg * um / (ms ** 2))
+    assert f"{q_micro}" == "1 µN"
+
+    kg = ureg.get("kg")    # 1 kg
+    km = ureg.get("km")    # 1e3 m
+    s  = ureg.get("s")     # 1 s
+    # kg·km/s² -> (1*1e3)/(1) = 1e3 -> kN
+    q_kilo = 1 @ (kg * km / (s ** 2))
+    assert f"{q_kilo}" == "1 kN"
+
+
+def test_current_symbol_and_prefix(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    C  = ureg.get("C")
+    s  = ureg.get("s")
+    mC = ureg.get("mC")   # 1e-3 C
+    ms = ureg.get("ms")   # 1e-3 s
+
+    # C/s -> A
+    q_A = (1 @ C) / (1 @ s)
+    assert f"{q_A}" == "1 A"
+
+    # µC/ms -> (1e-6 / 1e-3) = 1e-3 -> mA
+    uC = ureg.get("µC")
+    q_mA = (1 @ uC) / (1 @ ms)
+    assert f"{q_mA}" == "1 mA"
+
+    # mC/s -> (1e-3 / 1) = 1e-3 -> mA
+    q_mA2 = (1 @ mC) / (1 @ s)
+    assert f"{q_mA2}" == "1 mA"
+
+
+def test_power_symbol_and_prefix(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    J  = ureg.get("J")
+    s  = ureg.get("s")
+    mJ = ureg.get("mJ")
+    ms = ureg.get("ms")
+    uJ = ureg.get("µJ")
+
+    # J/s -> W
+    q_W = (1 @ J) / (1 @ s)
+    assert f"{q_W}" == "1 W"
+
+    # mJ/ms -> (1e-3 / 1e-3) = 1 -> W
+    q_W2 = (1 @ mJ) / (1 @ ms)
+    assert f"{q_W2}" == "1 W"
+
+    # µJ/ms -> (1e-6 / 1e-3) = 1e-3 -> mW
+    q_mW = (1 @ uJ) / (1 @ ms)
+    assert f"{q_mW}" == "1 mW"
+
+
+def test_pressure_symbol_and_prefix(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    mN = ureg.get("mN")   # 1e-3 N composed from kg·m/s² but available via registry
+    mm = ureg.get("mm")   # 1e-3 m
+
+    # mN/mm² -> (1e-3) / (1e-3)^2 = 1e3 -> kPa
+    # construct as a Quantity / Quantity so the unit algebra flows through
+    q_kPa = (1 @ mN) / ((1 @ mm) ** 2)
+    assert f"{q_kPa}" == "1 kPa"
+
+    # N/mm² -> (1) / (1e-3)^2 = 1e6 -> MPa
+    N = ureg.get("N")
+    q_MPa = (1 @ N) / ((1 @ mm) ** 2)
+    assert f"{q_MPa}" == "1 MPa"
+
+
+def test_frequency_symbol_and_prefix(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    ms = ureg.get("ms")
+    us = ureg.get("µs")
+    s  = ureg.get("s")
+
+    # 1/ms -> 1e3 1/s -> kHz
+    q_kHz = 1 @ (1 / ms)         # Unit reciprocal → Quantity via @
+    assert f"{q_kHz}" == "1 kHz"
+
+    # 1/µs -> 1e6 1/s -> MHz
+    q_MHz = 1 @ (1 / us)
+    assert f"{q_MHz}" == "1 MHz"
+
+    # 1/s -> Hz
+    q_Hz = 1 @ (1 / s)
+    assert f"{q_Hz}" == "1 Hz"
+
+
+def test_atomic_units_not_flipped(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    # Atomic SI heads should print as-is (no cross-family flip)
+    for sym in ("Hz", "Bq", "Gy", "Sv", "Pa", "A", "W", "N"):
+        u = ureg.get(sym)
+        assert f"{100 @ u}" == f"100 {sym}"
+
+
+def test_dimensionless_prints_number(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    m = ureg.get("m")
+    # (1 m) / (1 m) is dimensionless → bare number
+    q = (1 @ m) / (1 @ m)
+    # repr should be just the number; tolerate "1" exactly
+    assert f"{q}" == "1"
