@@ -200,14 +200,15 @@ class Quantity:
         )
 
     def to(self, new_unit: "Unit|str") -> Quantity:
-        unit_obj: "Unit"
         if(isinstance(new_unit, str)):
             from quantium.units.registry import DEFAULT_REGISTRY
             new_unit = extract_unit_expr(new_unit, DEFAULT_REGISTRY)
         
-        # FIX: Add an assertion here.
         # This proves to mypy that new_unit is a Unit, not a str.
-        assert not isinstance(new_unit, str)
+        if not isinstance(new_unit, Unit):
+            raise TypeError(
+                "Internal error: unit expression did not resolve to a Unit object."
+            )
 
         if new_unit.dim != self.dim:
             raise TypeError("Dimension mismatch in conversion")
