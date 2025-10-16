@@ -3,12 +3,11 @@ quantium.units.parser
 """
 
 from functools import lru_cache
-from typing import Tuple, Union, Optional # <-- Import Optional
-
+from typing import Tuple, Union, Optional
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from quantium.core.quantity import Unit # <-- Import Unit for type hints
+    from quantium.core.quantity import Unit  # <-- Import Unit for type hints
     from quantium.units.registry import UnitsRegistry
 
 # --- Plan node types ------------------------------------------------
@@ -37,7 +36,9 @@ class _UnitExprParser:
         plan = self._parse_expr()
         self._skip_ws()
         if self.i != self.n:
-            raise ValueError(f"Unexpected trailing input at {self.i}: {self.s[self.i:self.i+10]!r}")
+            raise ValueError(
+                f"Unexpected trailing input at {self.i}: {self.s[self.i:self.i+10]!r}"
+            )
         return plan
 
     # expr := term (('*' | '/') term)*
@@ -76,14 +77,12 @@ class _UnitExprParser:
             self._skip_ws()
             self._eat(')')
             return val
-        
-        # The original error was here: Incompatible return type
-        # Corrected to match the Plan type definition
+
+        # Allow a literal "1" to represent a dimensionless unit
         if self.i < self.n and self.s[self.i] == '1':
             self.i += 1
-            # Return type must match `Plan`. The second element can be a str.
             return ("one", "1", None)
-        
+
         name = self._parse_name()
         if not name:
             ch = self.s[self.i:self.i+1]
@@ -91,7 +90,7 @@ class _UnitExprParser:
         return ("name", name, None)
 
     # ---- token helpers ----
-    def _parse_name(self) -> Optional[str]: # <-- FIX: Added return type
+    def _parse_name(self) -> Optional[str]:  # <-- FIX: Added return type
         self._skip_ws()
         i0 = self.i
         if i0 < self.n and (self.s[i0].isalpha() or self.s[i0] == '_'):
@@ -113,7 +112,7 @@ class _UnitExprParser:
             raise ValueError(f"Expected integer exponent at {self.i}")
         return int(self.s[i0:self.i])
 
-    def _skip_ws(self) -> None: # <-- FIX: Added return type
+    def _skip_ws(self) -> None:  # <-- FIX: Added return type
         s, n, i = self.s, self.n, self.i
         while i < n and s[i].isspace():
             i += 1
@@ -125,52 +124,55 @@ class _UnitExprParser:
             return self.s[self.i:self.i+2] == '**'
         return self.i < self.n and self.s[self.i] == tok
 
-    def _eat(self, tok: str) -> None: # <-- FIX: Added return type
+    def _eat(self, tok: str) -> None:  # <-- FIX: Added return type
         if not self._peek(tok):
             got = self.s[self.i:self.i+len(tok)]
             raise ValueError(f"Expected {tok!r} at {self.i}, got {got!r}")
         self.i += len(tok)
 
 # ---------------- Evaluation of a plan against a given registry ----------------
-def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit": # <-- FIX: Added return type
+def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit":  # <-- FIX: Added return type
     kind, op1, op2 = plan
-    
+
     if kind == "name":
-        # Type narrowing: op1 is a string in this case
-        assert isinstance(op1, str), f"Malformed 'name' plan: {plan}"
+        if not isinstance(op1, str):
+            raise ValueError(f"Malformed 'name' plan (expected str): {plan!r}")
         try:
             return reg.get(op1)
         except Exception as e:
             raise ValueError(f"Unknown unit '{op1}': {e}") from None
-            
+
     elif kind == "one":
         from quantium.core.quantity import Unit
         from quantium.core.dimensions import DIM_0
         return Unit("1", 1.0, DIM_0)
 
     elif kind == "pow":
-        # FIX: Type narrowing. Check that op1 is a plan (tuple) before recursing.
-        assert isinstance(op1, tuple), f"Malformed 'pow' plan: {plan}"
-        assert isinstance(op2, int), f"Malformed 'pow' plan: {plan}"
+        if not isinstance(op1, tuple):
+            raise ValueError(f"Malformed 'pow' plan (expected plan tuple): {plan!r}")
+        if not isinstance(op2, int):
+            raise ValueError(f"Malformed 'pow' plan (expected int exponent): {plan!r}")
         base = _eval_plan(op1, reg)
         return base ** op2
-        
+
     elif kind == "mul":
-        # FIX: Type narrowing for both operands.
-        assert isinstance(op1, tuple), f"Malformed 'mul' plan: {plan}"
-        assert isinstance(op2, tuple), f"Malformed 'mul' plan: {plan}"
+        if not isinstance(op1, tuple):
+            raise ValueError(f"Malformed 'mul' plan (left must be plan tuple): {plan!r}")
+        if not isinstance(op2, tuple):
+            raise ValueError(f"Malformed 'mul' plan (right must be plan tuple): {plan!r}")
         left = _eval_plan(op1, reg)
         right = _eval_plan(op2, reg)
         return left * right
-        
+
     elif kind == "div":
-        # FIX: Type narrowing for both operands.
-        assert isinstance(op1, tuple), f"Malformed 'div' plan: {plan}"
-        assert isinstance(op2, tuple), f"Malformed 'div' plan: {plan}"
+        if not isinstance(op1, tuple):
+            raise ValueError(f"Malformed 'div' plan (left must be plan tuple): {plan!r}")
+        if not isinstance(op2, tuple):
+            raise ValueError(f"Malformed 'div' plan (right must be plan tuple): {plan!r}")
         left = _eval_plan(op1, reg)
         right = _eval_plan(op2, reg)
         return left / right
-        
+
     else:
         raise RuntimeError(f"Invalid plan node: {plan!r}")
 
@@ -179,10 +181,12 @@ def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit": # <-- FIX: Added ret
 def _compile_unit_expr(expr: str) -> Plan:
     disallowed = set('~!@#$%^&|+=,:;?<>\'\"`\\[]{}')
     if any(c in disallowed for c in expr):
-        raise ValueError("Only *, /, **, parentheses, unit names, and signed integer exponents are allowed.")
+        raise ValueError(
+            "Only *, /, **, parentheses, unit names, and signed integer exponents are allowed."
+        )
     return _UnitExprParser(expr).parse()
 
-def extract_unit_expr(expr: str, reg: "UnitsRegistry") -> "Unit": # <-- FIX: Added return type
+def extract_unit_expr(expr: str, reg: "UnitsRegistry") -> "Unit":  # <-- FIX: Added return type
     """
     Fast custom parser for unit expressions like 'kg*m/(nF**2 * s**2)'.
     """

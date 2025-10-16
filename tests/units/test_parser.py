@@ -1,180 +1,201 @@
-"""
-quantium.units.parser
-"""
+# tests/test_parser.py
+import math
+import pytest
 
-from functools import lru_cache
-from typing import Tuple, Union, Optional
+from quantium.units.parser import (
+    _UnitExprParser,
+    _compile_unit_expr,
+    extract_unit_expr,
+)
+from quantium.units.registry import UnitsRegistry, DEFAULT_REGISTRY
+from quantium.core.dimensions import (
+    LENGTH, TIME, MASS, CURRENT, DIM_0, dim_div, dim_mul, dim_pow
+)
+from quantium.core.quantity import Unit, Quantity
 
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from quantium.core.quantity import Unit
-    from quantium.units.registry import UnitsRegistry
+# --------------------------
+# Parsing-only unit tests
+# --------------------------
 
-# --- Plan node types ------------------------------------------------
-# ("name", <str>)
-# ("pow", <plan>, <int>)
-# ("mul", <plan>, <plan>)
-# ("div", <plan>, <plan>)
-Plan = Tuple[str, Union[str, int, "Plan"], Union[int, "Plan", None]]
+def test_parse_simple_name():
+    plan = _UnitExprParser("m").parse()
+    assert plan[0] == "name" and plan[1] == "m"
 
-# ---------------- Parser that builds a PLAN (no registry lookups!) ----------------
-class _UnitExprParser:
-    """
-    Grammar (no numbers except signed integers after **):
-      expr   := term (('*' | '/') term)*
-      term   := factor ['**' signed_int]?
-      factor := NAME | '(' expr ')'
-      NAME   := [A-Za-z_][A-Za-z0-9_]*
-      signed_int := ['+'|'-']? [0-9]+
-    """
-    def __init__(self, text: str):
-        self.s = text
-        self.n = len(text)
-        self.i = 0
+def test_parse_mul_div_and_precedence_smoke():
+    plan = _UnitExprParser("kg*m/s**2").parse()
+    # shape: (((kg * m) / (s**2))) left-assoc for * and /
+    assert plan[0] in {"div", "mul"}
 
-    def parse(self) -> Plan:
-        plan = self._parse_expr()
-        self._skip_ws()
-        if self.i != self.n:
-            raise ValueError(f"Unexpected trailing input at {self.i}: {self.s[self.i:self.i+10]!r}")
-        return plan
+def test_parse_parentheses_and_pow():
+    plan = _UnitExprParser("(m/s)**2").parse()
+    assert plan[0] == "pow" and plan[2] == 2
 
-    def _parse_expr(self) -> Plan:
-        left = self._parse_term()
-        while True:
-            self._skip_ws()
-            if self._peek('*') and not self._peek('**'):
-                self._eat('*')
-                right = self._parse_term()
-                left = ("mul", left, right)
-            elif self._peek('/'):
-                self._eat('/')
-                right = self._parse_term()
-                left = ("div", left, right)
-            else:
-                break
-        return left
+def test_parse_signed_exponents_positive():
+    plan = _UnitExprParser("m**+3").parse()
+    assert plan[0] == "pow" and plan[2] == 3
 
-    def _parse_term(self) -> Plan:
-        base = self._parse_factor()
-        self._skip_ws()
-        if self._peek('**'):
-            self._eat('**')
-            exp = self._parse_signed_int()
-            base = ("pow", base, exp)
-        return base
+def test_parse_signed_exponents_negative():
+    plan = _UnitExprParser("s**-2").parse()
+    assert plan[0] == "pow" and plan[2] == -2
 
-    def _parse_factor(self) -> Plan:
-        self._skip_ws()
-        if self._peek('('):
-            self._eat('(')
-            val = self._parse_expr()
-            self._skip_ws()
-            self._eat(')')
-            return val
-        
-        if self.i < self.n and self.s[self.i] == '1':
-            self.i += 1
-            return ("one", "1", None)
-        
-        name = self._parse_name()
-        if not name:
-            ch = self.s[self.i:self.i+1]
-            raise ValueError(f"Expected unit name or '(' at {self.i}, got {ch!r}")
-        return ("name", name, None)
+def test_parse_ignores_whitespace():
+    plan = _UnitExprParser("  kg *  m  /  s ** 2 ").parse()
+    assert plan  # parsed successfully
 
-    def _parse_name(self) -> Optional[str]:
-        self._skip_ws()
-        i0 = self.i
-        if i0 < self.n and (self.s[i0].isalpha() or self.s[i0] == '_'):
-            self.i += 1
-            while self.i < self.n and (self.s[self.i].isalnum() or self.s[self.i] == '_'):
-                self.i += 1
-            return self.s[i0:self.i]
-        return None
+def test_parse_unbalanced_parenthesis_raises():
+    with pytest.raises(ValueError):
+        _UnitExprParser("(m").parse()
 
-    def _parse_signed_int(self) -> int:
-        self._skip_ws()
-        i0 = self.i
-        if self.i < self.n and self.s[self.i] in '+-':
-            self.i += 1
-        i1 = self.i
-        while self.i < self.n and self.s[self.i].isdigit():
-            self.i += 1
-        if i1 == self.i:
-            raise ValueError(f"Expected integer exponent at {self.i}")
-        return int(self.s[i0:self.i])
+def test_parse_missing_exponent_raises():
+    with pytest.raises(ValueError):
+        _UnitExprParser("m**").parse()
 
-    def _skip_ws(self) -> None:
-        s, n, i = self.s, self.n, self.i
-        while i < n and s[i].isspace():
-            i += 1
-        self.i = i
+def test_parse_double_pow_in_term_raises_trailing():
+    # only one ** per term; the second triggers trailing input error
+    with pytest.raises(ValueError):
+        _UnitExprParser("m**2**3").parse()
 
-    def _peek(self, tok: str) -> bool:
-        self._skip_ws()
-        if tok == '**':
-            return self.s[self.i:self.i+2] == '**'
-        return self.i < self.n and self.s[self.i] == tok
+def test_prefilter_disallowed_characters():
+    with pytest.raises(ValueError):
+        _compile_unit_expr("m+s")  # '+' not allowed except as exponent sign
+    with pytest.raises(ValueError):
+        _compile_unit_expr("m[2]")
 
-    def _eat(self, tok: str) -> None:
-        if not self._peek(tok):
-            got = self.s[self.i:self.i+len(tok)]
-            raise ValueError(f"Expected {tok!r} at {self.i}, got {got!r}")
-        self.i += len(tok)
+def test_trailing_garbage_raises():
+    with pytest.raises(ValueError):
+        _UnitExprParser("m)").parse()
 
-# ---------------- Evaluation of a plan against a given registry ----------------
-def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit":
-    kind, op1, op2 = plan
-    
-    if kind == "name":
-        if not isinstance(op1, str):
-            raise TypeError(f"Malformed 'name' plan: {plan}")
-        try:
-            return reg.get(op1)
-        except Exception as e:
-            raise ValueError(f"Unknown unit '{op1}': {e}") from None
-            
-    elif kind == "one":
-        from quantium.core.quantity import Unit
-        from quantium.core.dimensions import DIM_0
-        return Unit("1", 1.0, DIM_0)
+def test_name_with_digit_tail_is_single_token_not_literal_one():
+    # Grammar allows digits after first char; "m1" is a NAME token
+    plan = _UnitExprParser("m1").parse()
+    assert plan == ("name", "m1", None)
 
-    elif kind == "pow":
-        if not isinstance(op1, tuple) or not isinstance(op2, int):
-            raise TypeError(f"Malformed 'pow' plan: {plan}")
-        base = _eval_plan(op1, reg)
-        return base ** op2
-        
-    elif kind == "mul":
-        if not isinstance(op1, tuple) or not isinstance(op2, tuple):
-            raise TypeError(f"Malformed 'mul' plan: {plan}")
-        left = _eval_plan(op1, reg)
-        right = _eval_plan(op2, reg)
-        return left * right
-        
-    elif kind == "div":
-        if not isinstance(op1, tuple) or not isinstance(op2, tuple):
-            raise TypeError(f"Malformed 'div' plan: {plan}")
-        left = _eval_plan(op1, reg)
-        right = _eval_plan(op2, reg)
-        return left / right
-        
-    else:
-        raise RuntimeError(f"Invalid plan node: {plan!r}")
 
-# ---------------- Public API with caching-safe compilation ----------------
-@lru_cache(maxsize=4096)
-def _compile_unit_expr(expr: str) -> Plan:
-    disallowed = set('~!@#$%^&|+=,:;?<>\'\"`\\[]{}')
-    if any(c in disallowed for c in expr):
-        raise ValueError("Only *, /, **, parentheses, unit names, and signed integer exponents are allowed.")
-    return _UnitExprParser(expr).parse()
+# --------------------------
+# Evaluation using real registry
+# --------------------------
 
-def extract_unit_expr(expr: str, reg: "UnitsRegistry") -> "Unit":
-    """
-    Fast custom parser for unit expressions like 'kg*m/(nF**2 * s**2)'.
-    """
-    plan = _compile_unit_expr(expr)
-    return _eval_plan(plan, reg)
+def test_eval_simple_name_with_default_registry():
+    reg = DEFAULT_REGISTRY
+    u = extract_unit_expr("m", reg)
+    assert isinstance(u, Unit)
+    assert u.dim == LENGTH
+    assert math.isclose(u.scale_to_si, 1.0)
+
+def test_eval_mul_div_pow_chain_dims_and_scale():
+    reg = DEFAULT_REGISTRY
+    u = extract_unit_expr("kg*m/s**2", reg)  # should be N (SI)
+    assert u.dim == dim_div(dim_mul(MASS, LENGTH), dim_pow(TIME, 2))
+    assert math.isclose(u.scale_to_si, 1.0)
+
+def test_eval_parenthesized_pow():
+    reg = DEFAULT_REGISTRY
+    u = extract_unit_expr("(m/s)**2", reg)
+    assert u.dim == dim_div(dim_pow(LENGTH, 2), dim_pow(TIME, 2))
+    assert math.isclose(u.scale_to_si, 1.0)
+
+def test_eval_left_associative_division():
+    # a/b/c == (a/b)/c; use custom registry with atomic 'a','b','c'
+    reg = UnitsRegistry()
+    reg.register(Unit("a", 1.0, LENGTH))
+    reg.register(Unit("b", 2.0, TIME))
+    reg.register(Unit("c", 5.0, MASS))
+    u = extract_unit_expr("a/b/c", reg)
+    assert u.dim == dim_div(dim_div(LENGTH, TIME), MASS)
+    assert math.isclose(u.scale_to_si, 1.0 / (2.0 * 5.0))
+
+def test_eval_literal_one_identity():
+    u = extract_unit_expr("1", DEFAULT_REGISTRY)
+    assert u.dim == DIM_0 and math.isclose(u.scale_to_si, 1.0)
+
+def test_eval_mul_with_one_does_not_change():
+    u = extract_unit_expr("m*1/s", DEFAULT_REGISTRY)
+    assert u.dim == dim_div(LENGTH, TIME)
+    assert math.isclose(u.scale_to_si, 1.0)
+
+def test_eval_signed_exponent_negative_scale_and_dims():
+    u = extract_unit_expr("s**-3", DEFAULT_REGISTRY)
+    assert u.dim == dim_pow(TIME, -3)
+    assert math.isclose(u.scale_to_si, 1.0)
+
+def test_eval_large_positive_and_negative_exponents():
+    reg = UnitsRegistry()
+    reg.register(Unit("x", 10.0, LENGTH))
+    reg.register(Unit("y", 0.5, TIME))
+    u = extract_unit_expr("x**10 / y**-7", reg)
+    # x^10 * y^7
+    assert u.dim == dim_mul(dim_pow(LENGTH, 10), dim_pow(TIME, 7))
+    assert math.isclose(u.scale_to_si, (10.0 ** 10) * ((0.5) ** 7))
+
+
+# --------------------------
+# Caching behavior (plan only)
+# --------------------------
+
+def test_compile_cache_reuses_plan_but_evaluates_against_each_registry():
+    # Two different registries with different factor for 'm'
+    reg1 = UnitsRegistry()
+    reg2 = UnitsRegistry()
+    reg1.register(Unit("m", 1.0, LENGTH))
+    reg2.register(Unit("m", 2.0, LENGTH))
+
+    # Plan is cached by expression string
+    p1 = _compile_unit_expr("m")
+    p2 = _compile_unit_expr("m")
+    assert p1 is p2
+
+    u1 = extract_unit_expr("m", reg1)
+    u2 = extract_unit_expr("m", reg2)
+    assert math.isclose(u1.scale_to_si, 1.0)
+    assert math.isclose(u2.scale_to_si, 2.0)
+
+
+# --------------------------
+# Registry integration extras
+# --------------------------
+
+def test_registry_delegates_to_parser_for_composed_expressions():
+    u = DEFAULT_REGISTRY.get("m/s")
+    assert u.dim == dim_div(LENGTH, TIME)
+    assert math.isclose(u.scale_to_si, 1.0)
+
+def test_prefix_synthesis_kilo_and_micro():
+    kW = DEFAULT_REGISTRY.get("kW")
+    assert kW.dim == dim_div(dim_mul(MASS, dim_pow(LENGTH, 2)), dim_pow(TIME, 3))  # W dim
+    assert math.isclose(kW.scale_to_si, 1000.0)
+
+    uF = DEFAULT_REGISTRY.get("uF")  # ASCII 'u' → µ normalization
+    # Farad is dim of capacitance; factor should be 1e-6
+    assert math.isclose(uF.scale_to_si, 1e-6)
+
+def test_alias_ohm_variants_map_to_omega():
+    for alias in ("ohm", "Ohm", "OHM"):
+        r = DEFAULT_REGISTRY.get(alias)
+        omega = DEFAULT_REGISTRY.get("Ω")
+        assert r == omega
+
+def test_non_prefixable_units_reject_prefix():
+    with pytest.raises(ValueError):
+        DEFAULT_REGISTRY.get("kmin")  # minutes are non-prefixable
+
+def test_quantity_and_unit_roundtrip_repr_and_conversion():
+    # 1000 cm/s should print as "1000 cm/s" by default, and "10 m/s" in SI
+    cm = Unit("cm", 0.01, LENGTH)
+    s = DEFAULT_REGISTRY.get("s")
+    v = Quantity(1000, cm / s)
+    assert f"{v}" == "1000 cm/s"
+    assert f"{v:si}" == "10 m/s"
+
+def test_unit_name_collapse_on_same_unit_multiplication():
+    s = DEFAULT_REGISTRY.get("s")
+    ss = s * s
+    # name normalization to power is expected (e.g., "s^2")
+    assert "^2" in ss.name
+    assert ss.dim == dim_pow(TIME, 2)
+
+def test_one_over_unit_name_formatting():
+    s = DEFAULT_REGISTRY.get("s")
+    inv = Unit("1", 1.0, DIM_0) / s   # via Unit.__truediv__
+    assert inv.name in ("1/s", "s^-1")  # depending on your formatting path
+    assert inv.dim == dim_pow(TIME, -1)
