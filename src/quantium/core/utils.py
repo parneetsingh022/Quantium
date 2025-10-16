@@ -90,8 +90,8 @@ def _expand_parentheses(name: str) -> str:
         exps = [1]
         for op in ops:
             exps.append(1 if op == '·' else -1)
-        num = [t for t, e in zip(tokens, exps) if e > 0]
-        den = [t for t, e in zip(tokens, exps) if e < 0]
+        num = [t for t, e in zip(tokens, exps, strict=True) if e > 0]
+        den = [t for t, e in zip(tokens, exps, strict=True) if e < 0]
         return num, den
 
     def _last_op_left_of(t: str, idx: int) -> Optional[str]:
@@ -136,7 +136,7 @@ def _expand_parentheses(name: str) -> str:
 
         if boundary_is_div:
             # Decide boundary style using the LAST operator to the LEFT of the boundary slash.
-            op_left = _last_op_left_of(s, k)  # '·', '/', or None
+            # op_left = _last_op_left_of(s, k)  # '·', '/', or None
             num, den = _num_den_from_linear(tokens, ops)
 
             if any(op == '·' for op in ops):

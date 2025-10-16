@@ -3,11 +3,12 @@ quantium.units.parser
 """
 
 from functools import lru_cache
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional # <-- Import Optional
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from quantium.core.quantity import Unit # <-- Import Unit for type hints
     from quantium.units.registry import UnitsRegistry
 
 # --- Plan node types ------------------------------------------------
@@ -75,19 +76,22 @@ class _UnitExprParser:
             self._skip_ws()
             self._eat(')')
             return val
-        name = self._parse_name()
-        # allow literal '1' as a factor (dimensionless identity)
+        
+        # The original error was here: Incompatible return type
+        # Corrected to match the Plan type definition
         if self.i < self.n and self.s[self.i] == '1':
             self.i += 1
-            return ("one", None, None)
+            # Return type must match `Plan`. The second element can be a str.
+            return ("one", "1", None)
         
+        name = self._parse_name()
         if not name:
             ch = self.s[self.i:self.i+1]
             raise ValueError(f"Expected unit name or '(' at {self.i}, got {ch!r}")
         return ("name", name, None)
 
     # ---- token helpers ----
-    def _parse_name(self):
+    def _parse_name(self) -> Optional[str]: # <-- FIX: Added return type
         self._skip_ws()
         i0 = self.i
         if i0 < self.n and (self.s[i0].isalpha() or self.s[i0] == '_'):
@@ -109,7 +113,7 @@ class _UnitExprParser:
             raise ValueError(f"Expected integer exponent at {self.i}")
         return int(self.s[i0:self.i])
 
-    def _skip_ws(self):
+    def _skip_ws(self) -> None: # <-- FIX: Added return type
         s, n, i = self.s, self.n, self.i
         while i < n and s[i].isspace():
             i += 1
@@ -121,68 +125,66 @@ class _UnitExprParser:
             return self.s[self.i:self.i+2] == '**'
         return self.i < self.n and self.s[self.i] == tok
 
-    def _eat(self, tok: str):
+    def _eat(self, tok: str) -> None: # <-- FIX: Added return type
         if not self._peek(tok):
             got = self.s[self.i:self.i+len(tok)]
             raise ValueError(f"Expected {tok!r} at {self.i}, got {got!r}")
         self.i += len(tok)
 
 # ---------------- Evaluation of a plan against a given registry ----------------
-def _eval_plan(plan: Plan, reg: "UnitsRegistry"):
-    kind = plan[0]
+def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit": # <-- FIX: Added return type
+    kind, op1, op2 = plan
+    
     if kind == "name":
-        name = plan[1]
+        # Type narrowing: op1 is a string in this case
+        assert isinstance(op1, str), f"Malformed 'name' plan: {plan}"
         try:
-            return reg.get(name)  # late binding to the provided registry
+            return reg.get(op1)
         except Exception as e:
-            raise ValueError(f"Unknown unit '{name}': {e}") from None
-    elif kind == "one":  # NEW
-        # Lazy import to avoid circulars
+            raise ValueError(f"Unknown unit '{op1}': {e}") from None
+            
+    elif kind == "one":
         from quantium.core.quantity import Unit
         from quantium.core.dimensions import DIM_0
         return Unit("1", 1.0, DIM_0)
+
     elif kind == "pow":
-        base = _eval_plan(plan[1], reg)
-        exp = plan[2]  # int
-        return base ** exp
+        # FIX: Type narrowing. Check that op1 is a plan (tuple) before recursing.
+        assert isinstance(op1, tuple), f"Malformed 'pow' plan: {plan}"
+        assert isinstance(op2, int), f"Malformed 'pow' plan: {plan}"
+        base = _eval_plan(op1, reg)
+        return base ** op2
+        
     elif kind == "mul":
-        left = _eval_plan(plan[1], reg)
-        right = _eval_plan(plan[2], reg)
+        # FIX: Type narrowing for both operands.
+        assert isinstance(op1, tuple), f"Malformed 'mul' plan: {plan}"
+        assert isinstance(op2, tuple), f"Malformed 'mul' plan: {plan}"
+        left = _eval_plan(op1, reg)
+        right = _eval_plan(op2, reg)
         return left * right
+        
     elif kind == "div":
-        left = _eval_plan(plan[1], reg)
-        right = _eval_plan(plan[2], reg)
+        # FIX: Type narrowing for both operands.
+        assert isinstance(op1, tuple), f"Malformed 'div' plan: {plan}"
+        assert isinstance(op2, tuple), f"Malformed 'div' plan: {plan}"
+        left = _eval_plan(op1, reg)
+        right = _eval_plan(op2, reg)
         return left / right
+        
     else:
         raise RuntimeError(f"Invalid plan node: {plan!r}")
 
 # ---------------- Public API with caching-safe compilation ----------------
-# Cache the *compiled plan* only. Safe across registries because there's no bound objects inside.
 @lru_cache(maxsize=4096)
 def _compile_unit_expr(expr: str) -> Plan:
-    # cheap prefilter to reject disallowed characters early.
-    # Note: '+' is allowed only as a sign in exponents; this prefilter doesn't distinguish positions
-    # but keeps things simple—parser will give precise errors if needed.
     disallowed = set('~!@#$%^&|+=,:;?<>\'\"`\\[]{}')
     if any(c in disallowed for c in expr):
         raise ValueError("Only *, /, **, parentheses, unit names, and signed integer exponents are allowed.")
     return _UnitExprParser(expr).parse()
 
-def extract_unit_expr(expr: str, reg: "UnitsRegistry"):
+def extract_unit_expr(expr: str, reg: "UnitsRegistry") -> "Unit": # <-- FIX: Added return type
     """
     Fast custom parser for unit expressions like 'kg*m/(nF**2 * s**2)'.
-
-    Caching-safety:
-      * We cache a compiled syntax plan keyed by `expr` only (no registry state).
-      * Evaluation binds names to units from the *provided* `reg` at call time.
-
-    Allowed syntax:
-      * Operators: '*', '/', '**' with integer (optionally signed) exponents.
-      * Parentheses and unit names [A-Za-z_][A-Za-z0-9_]*
-      * Anything else raises ValueError.
-
-    Returns:
-      A unit object from the given registry (whatever `reg.get()` returns for names).
     """
     plan = _compile_unit_expr(expr)
     return _eval_plan(plan, reg)

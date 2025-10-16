@@ -539,8 +539,10 @@ def test_thread_safety_compound_get(reg):
     ] * 8  # repeat to create more concurrency
 
     threads = [threading.Thread(target=worker, args=(e,)) for e in exprs]
-    for t in threads: t.start()
-    for t in threads: t.join()
+    for t in threads: 
+        t.start()
+    for t in threads: 
+        t.join()
 
     assert not errs
     # basic sanity: all results are Units with sensible dim/scale
