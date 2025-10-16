@@ -34,6 +34,174 @@ Dim: TypeAlias = Tuple[int, int, int, int, int, int, int]
 
 _SUPERSCRIPTS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
 
+def _expand_parentheses(name: str) -> str:
+    """
+    Expand parentheses in a unit string so division distributes over groups and
+    quotients invert, then strip all neutral parentheses (those not immediately
+    divided by). Matches expected normalizations:
+
+      'W·s/(N·s/m^2)'              -> 'W·s/m^2/N/s'
+      '(kg·m/s^2)·m/s'            -> 'kg·m/s^2·m/s'
+      'x/(a/b·c)'                 -> 'x·b/a/c'
+      '(a/b)/(c/d)'               -> 'a/b/c·d'
+      'a * ( b / c ) / ( d / e )' -> 'a·b/c/d·e'
+      'x/(a/(b/c))'               -> 'x/(a/b·c)'  (only innermost expanded this pass)
+      '((m))'                     -> 'm'          (neutral parens stripped)
+    """
+    if not name:
+        return name
+
+    s = name.replace("*", "·")  # normalize '*' to middle dot
+
+    def _strip_spaces(x: str) -> str:
+        return re.sub(r"\s+", " ", x).strip()
+
+    def _tokenize_linear(expr: str) -> Tuple[List[str], List[str]]:
+        """
+        Tokenize a paren-free expr into (tokens, ops).
+        tokens: ['N','s','m^2']
+        ops:    ['·','/']  # operators *between* tokens
+        """
+        parts = re.split(r"([·/])", expr.strip())
+        tokens: List[str] = []
+        ops: List[str] = []
+        last_sep = '·'
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            if part in ("·", "/"):
+                last_sep = part
+            else:
+                if tokens:
+                    ops.append(last_sep)
+                tokens.append(part)
+                last_sep = '·'
+        return tokens, ops
+
+    def _num_den_from_linear(tokens: List[str], ops: List[str]) -> Tuple[List[str], List[str]]:
+        """
+        From a flat (no-paren) expression, compute numerator/denominator token lists
+        by left-associative interpretation: first token exponent +1, then
+        '·' -> +1, '/' -> -1 for the next token.
+        """
+        if not tokens:
+            return [], []
+        exps = [1]
+        for op in ops:
+            exps.append(1 if op == '·' else -1)
+        num = [t for t, e in zip(tokens, exps) if e > 0]
+        den = [t for t, e in zip(tokens, exps) if e < 0]
+        return num, den
+
+    def _last_op_left_of(t: str, idx: int) -> Optional[str]:
+        """Return the last '·' or '/' strictly to the left of idx in t, else None."""
+        j = idx - 1
+        while j >= 0:
+            ch = t[j]
+            if ch in ('·', '/'):
+                return ch
+            j -= 1
+        return None
+
+    # ---- Phase 1: expand all innermost groups ONCE (don’t peel enclosing groups) ----
+    stack: List[Tuple[int, bool]] = []  # (start_idx, has_inner)
+    innermost: List[Tuple[int, int]] = []  # (start_idx, end_idx) inclusive parens
+    for idx, ch in enumerate(s):
+        if ch == '(':
+            stack.append((idx, False))
+        elif ch == ')':
+            if not stack:
+                return s  # unbalanced
+            start, has_inner = stack.pop()
+            if not has_inner:
+                innermost.append((start, idx))
+            if stack:
+                pstart, _ = stack.pop()
+                stack.append((pstart, True))
+    if stack:
+        return s  # unbalanced
+
+    # Replace from right to left so indices remain valid
+    for start, end in reversed(innermost):
+        inner = s[start + 1:end]
+        inner_clean = _strip_spaces(inner)
+        tokens, ops = _tokenize_linear(inner_clean)
+
+        # Is there a boundary slash just before '(' (ignoring spaces)?
+        k = start - 1
+        while k >= 0 and s[k].isspace():
+            k -= 1
+        boundary_is_div = (k >= 0 and s[k] == '/')
+
+        if boundary_is_div:
+            # Decide boundary style using the LAST operator to the LEFT of the boundary slash.
+            op_left = _last_op_left_of(s, k)  # '·', '/', or None
+            num, den = _num_den_from_linear(tokens, ops)
+
+            if any(op == '·' for op in ops):
+                # Always dot-boundary for correct algebra:
+                # /(Num·…/Den·…)  ->  ·Den·… / Num·…
+                left_dot = ("·" + "·".join(den)) if den else ""
+                right_slashes = ("/" + "/".join(num)) if num else ""
+                repl = left_dot + right_slashes
+            else:
+                # Pure quotient inside (e.g., c/d): -> /c·d
+                if tokens:
+                    first, rest = tokens[0], tokens[1:]
+                    repl = "/" + first + (("·" + "·".join(rest)) if rest else "")
+                else:
+                    repl = ""
+
+            # Remove the boundary slash and the whole '(...)', insert replacement
+            left = s[:k].rstrip()             # trim any space before the slash
+            right = s[end + 1:]
+            s = left + repl + right
+        else:
+            # Neutral context: drop parentheses
+            s = s[:start] + inner_clean + s[end + 1:]
+
+    # ---- Phase 2: strip ALL remaining neutral parentheses (NOT immediately after '/') ----
+    changed = True
+    while changed:
+        changed = False
+        i = 0
+        n = len(s)
+        while i < n:
+            if s[i] != '(':
+                i += 1
+                continue
+            # find matching ')'
+            depth = 1
+            j = i + 1
+            while j < n and depth > 0:
+                if s[j] == '(':
+                    depth += 1
+                elif s[j] == ')':
+                    depth -= 1
+                j += 1
+            if depth != 0:
+                return s  # unbalanced
+            # is this parenthesis immediately divided by? (ignore spaces)
+            k = i - 1
+            while k >= 0 and s[k].isspace():
+                k -= 1
+            divided = (k >= 0 and s[k] == '/')
+            if not divided:
+                inner = _strip_spaces(s[i + 1:j - 1])
+                s = s[:i] + inner + s[j:]
+                changed = True
+                n = len(s)
+                # keep i the same; content shifted left
+            else:
+                i = j  # skip over this group
+
+    # ---- Final tidy: strip spaces and remove any spaces around separators ----
+    s = _strip_spaces(s)
+    s = re.sub(r"\s*/\s*", "/", s)
+    s = re.sub(r"\s*·\s*", "·", s)
+    return s
+
 
 def _sup(n: int) -> str:
     return "" if n == 1 else str(n).translate(_SUPERSCRIPTS)
@@ -79,6 +247,7 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
     if not name or name == "1":
         return {}
 
+    name = _expand_parentheses(name)
     # Normalize ASCII separators
     name = name.replace("*", "·")
 

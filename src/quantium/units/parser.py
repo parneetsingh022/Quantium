@@ -1,3 +1,7 @@
+"""
+quantium.units.parser
+"""
+
 from functools import lru_cache
 from typing import Tuple, Union
 
@@ -72,6 +76,11 @@ class _UnitExprParser:
             self._eat(')')
             return val
         name = self._parse_name()
+        # allow literal '1' as a factor (dimensionless identity)
+        if self.i < self.n and self.s[self.i] == '1':
+            self.i += 1
+            return ("one", None, None)
+        
         if not name:
             ch = self.s[self.i:self.i+1]
             raise ValueError(f"Expected unit name or '(' at {self.i}, got {ch!r}")
@@ -127,6 +136,11 @@ def _eval_plan(plan: Plan, reg: "UnitsRegistry"):
             return reg.get(name)  # late binding to the provided registry
         except Exception as e:
             raise ValueError(f"Unknown unit '{name}': {e}") from None
+    elif kind == "one":  # NEW
+        # Lazy import to avoid circulars
+        from quantium.core.quantity import Unit
+        from quantium.core.dimensions import DIM_0
+        return Unit("1", 1.0, DIM_0)
     elif kind == "pow":
         base = _eval_plan(plan[1], reg)
         exp = plan[2]  # int
