@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `f"{q:si}"` → displays the quantity converted to SI units.  
   This provides a cleaner and more Pythonic way to print quantities without calling `.to_si()` manually.
 
+- Units and quantities now support string-based compound expressions in `.get()` and `.to()` (e.g., `"m/s**2"`, `"(W*s)/(N*s/m**2)"`, `"1/s"`), enabling intuitive text-based conversions and registry lookups for mixed or derived units.
+
 
 ## [0.0.1a0] - 2025-10-09
 ### Added

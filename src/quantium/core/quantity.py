@@ -27,7 +27,7 @@ from math import isclose, isfinite
 import re
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
-from quantium.units.prefixes import PREFIXES
+from quantium.units.parser import extract_unit_expr
 
 _POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
 
@@ -108,10 +108,18 @@ class Unit:
         return Unit(new_unit_name, new_scale, new_dim)
 
 
-    def __truediv__(self, other : Unit) -> Unit:
+    def __truediv__(self, other: "Unit") -> "Unit":
         new_dim = dim_div(self.dim, other.dim)
-        new_unit_name = f"{self.name}/{other.name}"
         new_scale = self.scale_to_si / other.scale_to_si
+
+        # Parenthesize denominator if it's compound to avoid flattening like "W·s/N·s/m^2"
+        def _needs_paren(name: str) -> bool:
+            # name contains any operator that would change precedence if ungrouped
+            return any(op in name for op in ("·", "*", "/")) and not (name.startswith("(") and name.endswith(")"))
+
+        right = f"({other.name})" if _needs_paren(other.name) else other.name
+        new_unit_name = f"{self.name}/{right}"
+
         return Unit(new_unit_name, new_scale, new_dim)
     
     def __rtruediv__(self, n: int | float) -> Unit:
@@ -191,7 +199,17 @@ class Quantity:
             and isclose(self._mag_si, other._mag_si, rel_tol=1e-12, abs_tol=0.0)
         )
 
-    def to(self, new_unit: Unit) -> Quantity:
+    def to(self, new_unit: "Unit|str") -> Quantity:
+        if(isinstance(new_unit, str)):
+            from quantium.units.registry import DEFAULT_REGISTRY
+            new_unit = extract_unit_expr(new_unit, DEFAULT_REGISTRY)
+        
+        # This proves to mypy that new_unit is a Unit, not a str.
+        if not isinstance(new_unit, Unit):
+            raise TypeError(
+                "Internal error: unit expression did not resolve to a Unit object."
+            )
+
         if new_unit.dim != self.dim:
             raise TypeError("Dimension mismatch in conversion")
         

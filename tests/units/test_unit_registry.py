@@ -413,3 +413,140 @@ def test_seconds_still_prefixable_but_not_month_year(reg):
     for sym in ["kmo", "kyr", "µh"]:
         with pytest.raises(ValueError):
             reg.get(sym)
+
+
+# -------------------------------
+# Basic compound parsing & equivalence
+# -------------------------------
+
+def test_get_compound_velocity_and_acceleration(reg):
+    u1 = reg.get("m/s**2")             # parser path
+    u2 = reg.get("m") / (reg.get("s") ** 2)  # manual composition
+    assert isinstance(u1, Unit)
+    assert u1.dim == u2.dim
+    assert u1.scale_to_si == pytest.approx(u2.scale_to_si)
+
+def test_get_compound_force_equals_newton(reg):
+    nm = reg.get("kg*m/s**2")   # base composition
+    N  = reg.get("N")           # named
+    assert nm.dim == N.dim
+    assert nm.scale_to_si == pytest.approx(N.scale_to_si)
+
+def test_get_literal_one_over_second_equals_hz(reg):
+    inv_s = reg.get("1/s")
+    Hz = reg.get("Hz")
+    assert inv_s.dim == Hz.dim
+    assert inv_s.scale_to_si == pytest.approx(1.0)
+
+
+# -------------------------------
+# Parentheses distribution cases
+# -------------------------------
+
+def test_get_parentheses_complex_reduces_to_m3_per_s(reg):
+    # (W*s)/(N*s/m**2) -> m^3/s (scale 1)
+    u_expr = reg.get("(W*s)/(N*s/m**2)")
+    u_si   = reg.get("m**3/s")
+    assert u_expr.dim == u_si.dim
+    assert u_expr.scale_to_si == pytest.approx(1.0)
+
+def test_get_parentheses_with_prefixes_and_mm(reg):
+    # (uW*s)/(N*s/mm**2) -> 1e-12 * m^3/s
+    u_expr = reg.get("(uW*s)/(N*s/mm**2)")
+    u_si   = reg.get("m**3/s")
+    assert u_expr.dim == u_si.dim
+    # uW = 1e-6 W, mm^2 = 1e-6 m^2  => overall factor 1e-12
+    assert u_expr.scale_to_si == pytest.approx(1e-12)
+
+
+# -------------------------------
+# Aliases & prefixes inside expressions
+# -------------------------------
+
+def test_get_alias_inside_expression(reg):
+    # ohm alias should normalize to Ω and V = Ω·A
+    v1 = reg.get("ohm*A")
+    V  = reg.get("V")
+    assert v1.dim == V.dim
+    assert v1.scale_to_si == pytest.approx(1.0)
+
+def test_get_prefix_inside_expression(reg):
+    # 10 cm/s vs m/s scale factors: reg.get should synthesize cm correctly
+    cm_per_s = reg.get("cm/s")
+    m_per_s  = reg.get("m/s")
+    # compare scales to SI: cm/s should be 1e-2 m/s
+    assert cm_per_s.dim == m_per_s.dim
+    assert cm_per_s.scale_to_si == pytest.approx(1e-2)
+
+
+# -------------------------------
+# Idempotence / caching of expressions
+# (identity not required, but equality must hold)
+# -------------------------------
+
+def test_get_same_expression_twice_equal_not_necessarily_identical(reg):
+    u1 = reg.get("kg*m/s**2")
+    u2 = reg.get("kg*m/s**2")
+    assert u1 is not None and u2 is not None
+    assert u1.dim == u2.dim
+    assert u1.scale_to_si == pytest.approx(u2.scale_to_si)
+    # different object identity is fine; equality is defined by dim+scale
+
+
+# -------------------------------
+# Errors & invalid syntax
+# -------------------------------
+
+@pytest.mark.parametrize("bad", [
+    "m//s",         # disallowed token
+    "m/s**",        # trailing operator
+    "*/s",          # starts with operator
+    "(",            # unbalanced paren
+    "m/s)",         # unbalanced paren
+    "1/",           # dangling slash
+    "kg*m/s**x",    # non-integer exponent
+    "kg*m/s**+2+3", # trailing noise
+])
+def test_get_compound_invalid_syntax_raises(reg, bad):
+    with pytest.raises(ValueError):
+        reg.get(bad)
+
+def test_get_compound_unknown_symbol_raises(reg):
+    with pytest.raises(ValueError):
+        reg.get("kg*blorp/s")
+
+
+# -------------------------------
+# Thread-safety smoke test for compound expressions
+# -------------------------------
+
+def test_thread_safety_compound_get(reg):
+    errs = []
+    outs = []
+
+    def worker(expr):
+        try:
+            outs.append(reg.get(expr))
+        except Exception as e:
+            errs.append(e)
+
+    exprs = [
+        "kg*m/s**2",
+        "m/s",
+        "(W*s)/(N*s/m**2)",
+        "1/s",
+        "cm/s",
+    ] * 8  # repeat to create more concurrency
+
+    threads = [threading.Thread(target=worker, args=(e,)) for e in exprs]
+    for t in threads: 
+        t.start()
+    for t in threads: 
+        t.join()
+
+    assert not errs
+    # basic sanity: all results are Units with sensible dim/scale
+    assert all(isinstance(u, Unit) for u in outs)
+    # verify a couple of expected dims quickly
+    assert any(u.dim == dim_div(LENGTH, TIME) for u in outs)        # m/s cases
+    assert any(u.dim == dim_pow(TIME, -1) for u in outs)            # 1/s cases

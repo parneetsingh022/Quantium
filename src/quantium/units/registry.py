@@ -42,6 +42,7 @@ from quantium.core.dimensions import (
     dim_pow,
 )
 from quantium.core.quantity import Unit
+from quantium.units.parser import extract_unit_expr
 
 
 
@@ -137,6 +138,10 @@ class UnitsRegistry:
 
         Raises `ValueError` if unknown.
         """
+        # if it is a composed expression
+        if any(op in symbol for op in ('*', '/')):
+            return extract_unit_expr(symbol, self)
+        
         sym = normalize_symbol(symbol)
         with self._lock:
             # alias redirect

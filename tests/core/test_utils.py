@@ -169,3 +169,59 @@ def test_invalidate_preferred_cache_rebuilds_map(monkeypatch):
         utils.invalidate_preferred_cache()
         sym3 = utils.preferred_symbol_for_dim(dim_pow(TIME, -1))
         assert sym3 == "Hz"
+
+
+# -------------------------------
+# _expand_parentheses
+# -------------------------------
+
+@pytest.mark.parametrize("expr, expected", [
+    # --- docstring examples / core behaviors ---
+    ("W·s/(N·s/m^2)", "W·s·m^2/N/s"),
+    ("(kg·m/s^2)·m/s", "kg·m/s^2·m/s"),
+    ("x/(a/b·c)", "x·b/a/c"),
+
+    # --- simple cases (no change) ---
+    ("kg·m/s^2", "kg·m/s^2"),            # no parentheses → unchanged
+    ("m", "m"),
+
+    # --- ASCII '*' normalization inside and around parens ---
+    ("a*(b/c)", "a·b/c"),
+    ("a*(b*c)", "a·b·c"),
+    ("a/(b*c)", "a/b/c"),
+
+    # --- neutral/single-token parentheses are removed ---
+    ("(m^2)", "m^2"),
+    ("((m))", "m"),
+
+    # --- multiple groups ---
+    ("a/(b·c)·(d/e)", "a/b/c·d/e"),
+    ("(a/b)/(c/d)", "a/b/c·d"),          # outer division by (c/d) → multiply by d/c
+
+    # --- nested parentheses (expand innermost-first) ---
+    ("x/(a/(b/c))", "x/(a/b·c)"),        # inner expands; outer left as-is for next pass by caller
+    # If the caller feeds the result back in again, it would become: "x·c/b/a"
+    # but this test checks the function's single-pass contract.
+
+    # --- spaces & mixed separators handled ---
+    ("a * ( b / c ) / ( d / e )", "a·b/c/d·e"),
+])
+def test_expand_parentheses_various(expr, expected):
+    assert utils._expand_parentheses(expr) == expected
+
+
+def test_expand_parentheses_unbalanced_returns_input():
+    # The helper bails out (returns input) when it can't find a matching ')'
+    expr = "a/(b"
+    assert utils._expand_parentheses(expr) == expr
+
+
+def test_expand_parentheses_idempotent():
+    # Once expanded, a second call should be a no-op
+    expr = "W·s/(N·s/m^2)"
+    once = utils._expand_parentheses(expr)
+    twice = utils._expand_parentheses(once)
+    assert once == twice
+
+
+
