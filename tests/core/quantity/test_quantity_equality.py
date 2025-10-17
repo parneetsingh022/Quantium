@@ -18,8 +18,8 @@ def test_quantity_equality_same_si_and_equivalent_units():
     N = ureg.get("N")
     unit_from_bases = kg * m / (s ** 2)   # equals N by dim+scale
 
-    q1 = 10 @ N
-    q2 = 10 @ unit_from_bases
+    q1 = 10 * N
+    q2 = 10 * unit_from_bases
 
     # _mag_si identical & units compare equal (ignoring name)
     assert q1 == q2
@@ -32,8 +32,8 @@ def test_quantity_equality_same_si_magnitude_different_units():
     m  = Unit("m", 1.0, LENGTH)
     cm = Unit("cm", 0.01, LENGTH)
 
-    q_cm = 100 @ cm  # _mag_si = 1.0
-    q_m  = 1 @ m     # _mag_si = 1.0
+    q_cm = 100 * cm  # _mag_si = 1.0
+    q_m  = 1 * m     # _mag_si = 1.0
 
     # They should now compare equal because their physical values are identical.
     assert q_cm == q_m
@@ -42,15 +42,15 @@ def test_quantity_equality_same_si_magnitude_different_units():
 @pytest.mark.regression(reason="Quantities with different SI magnitudes must not be equal even if units match")
 def test_quantity_inequality_different_si_magnitude_same_unit():
     m = Unit("m", 1.0, LENGTH)
-    q1 = 2 @ m
-    q2 = 3 @ m
+    q1 = 2 * m
+    q2 = 3 * m
     assert q1 != q2
 
 
 @pytest.mark.regression(reason="Quantity __eq__ returns NotImplemented for incompatible types")
 def test_quantity_equality_with_incompatible_type_returns_notimplemented():
     m = Unit("m", 1.0, LENGTH)
-    q = 1 @ m
+    q = 1 * m
     assert Quantity.__eq__(q, "not-a-quantity") is NotImplemented
     assert (q == "not-a-quantity") is False
 
@@ -69,6 +69,6 @@ def test_quantity_equality_when_units_simplify_to_same_dim_and_scale():
     alt = (m * s) / (s ** 2)
     assert ms == alt  # unit equality check
 
-    q1 = 12 @ ms
-    q2 = 12 @ alt
+    q1 = 12 * ms
+    q2 = 12 * alt
     assert q1 == q2

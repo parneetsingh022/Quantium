@@ -10,7 +10,7 @@ def _name(sym: str, n: int) -> str:
 
 def test_power_of_quantity():
     m = Unit("m", 1.0, LENGTH)
-    q2 = (2 @ m) ** 2  # -> 4 m^2
+    q2 = (2 * m) ** 2  # -> 4 m^2
 
     assert q2.dim == dim_pow(LENGTH, 2)
     assert q2.unit.name == "m^2"
@@ -20,7 +20,7 @@ def test_power_of_quantity():
 @pytest.mark.regression(reason="Issue: #33 Unit raised to power 0 is not dimensionless")
 def test_quantity_pow_zero_and_one_and_negative():
     m = Unit("m", 1.0, LENGTH)
-    q = 2 @ m
+    q = 2 * m
     q0 = q ** 0
     q1 = q ** 1
     qn = q ** -2
@@ -59,7 +59,7 @@ def test_unit_pow_negative_high_exponents_regression_issue_33(sym: str, scale: f
 ])
 def test_quantity_pow_negative_high_exponents_regression_issue_33(sym: str, scale: float, value: float, n: int):
     u = Unit(sym, scale, LENGTH)
-    q = value @ u
+    q = value * u
     qp = q ** n
 
     # Dimension & unit name/scale

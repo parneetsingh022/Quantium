@@ -22,7 +22,7 @@ def test_to_si_uses_preferred_symbol_when_available(monkeypatch):
     monkeypatch.setattr(utils, "format_dim", fake_format, raising=True)
 
     cm = Unit("cm", 0.01, LENGTH)
-    q_si = (123 @ cm).to_si()
+    q_si = (123 * cm).to_si()
 
     assert isinstance(q_si, Quantity)
     assert q_si.unit.name == "m"         # preferred symbol chosen
@@ -43,7 +43,7 @@ def test_to_si_fallbacks_to_formatted_dim_when_no_symbol(monkeypatch):
 
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TEMPERATURE)
-    q = ((5 @ m) / (2 @ s)).to_si()
+    q = ((5 * m) / (2 * s)).to_si()
 
     assert q.unit.name == "m/s"          # composed SI name from format_dim
     assert q.unit.scale_to_si == 1.0
@@ -56,7 +56,7 @@ def test_to_si_fallbacks_to_formatted_dim_when_no_symbol(monkeypatch):
 def test_si_equivalent_to_to_si():
     cm = ureg.get("cm")
 
-    q = 123 @ cm        # 1.23 m in SI
+    q = 123 * cm        # 1.23 m in SI
     q_si = q.si
     q_to_si = q.to_si()
 
@@ -81,7 +81,7 @@ def test_si_uses_preferred_symbol_when_available(monkeypatch):
     monkeypatch.setattr(utils, "format_dim", fake_format, raising=True)
 
     cm = ureg.get("cm")
-    q_si = (123 @ cm).si  # 1.23 m
+    q_si = (123 * cm).si  # 1.23 m
 
     assert isinstance(q_si, Quantity)
     assert q_si.unit.name == "m"         # preferred symbol chosen
@@ -104,7 +104,7 @@ def test_si_fallbacks_to_formatted_dim_when_no_symbol(monkeypatch):
 
     m = ureg.get("m")
     s = ureg.get("s")
-    q = ((5 @ m) / (2 @ s)).si  # 2.5 m/s
+    q = ((5 * m) / (2 * s)).si  # 2.5 m/s
 
     assert q.unit.name == "m/s"
     assert q.unit.scale_to_si == 1.0
@@ -115,7 +115,7 @@ def test_si_does_not_mutate_original_quantity():
     cm = ureg.get("cm")
     ms = ureg.get("ms")
 
-    v = 1000 @ (cm / ms)  # original in cm/ms
+    v = 1000 * (cm / ms)  # original in cm/ms
     v_si = v.si           # 10000 m/s
 
     # original unchanged
@@ -135,5 +135,5 @@ def test_si_repr_respects_preferred_symbol_when_scale_is_1(monkeypatch):
     monkeypatch.setattr(utils, "preferred_symbol_for_dim", lambda d: "m" if d == LENGTH else None, raising=True)
 
     cm = ureg.get("cm")
-    q_si = (123 @ cm).si  # 1.23 m in SI
+    q_si = (123 * cm).si  # 1.23 m in SI
     assert repr(q_si) == "1.23 m"

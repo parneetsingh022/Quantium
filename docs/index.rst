@@ -54,7 +54,7 @@ Contributing
 ------------
 
 We welcome contributions from the community!  
-To get started, see the :doc:`contributing` guide for details on code style, testing, and pull requests.
+To get started, See the `CONTRIBUTING guide <https://github.com/parneetsingh022/quantium/blob/main/CONTRIBUTING.md>`_ for details.
 
 ----
 
@@ -62,4 +62,4 @@ License
 -------
 
 Quantium is distributed under the MIT License.  
-See the :doc:`changelog` for version history and recent updates.
+See the `CHANGELOG <https://github.com/parneetsingh022/quantium/blob/main/CHANGELOG.md>`_ for version history and recent updates.

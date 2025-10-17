@@ -13,8 +13,8 @@ from quantium.core.quantity import Unit, Quantity
 def test_add_and_sub_same_dim():
     m = Unit("m", 1.0, LENGTH)
     cm = Unit("cm", 0.01, LENGTH)
-    q1 = 1 @ m
-    q2 = 50 @ cm  # 0.5 m
+    q1 = 1 * m
+    q2 = 50 * cm  # 0.5 m
 
     s = q1 + q2   # left unit ("m") retained
     d = q1 - q2
@@ -27,11 +27,11 @@ def test_add_dim_mismatch_raises():
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TEMPERATURE)
     with pytest.raises(TypeError):
-        _ = (1 @ m) + (1 @ s)
+        _ = (1 * m) + (1 * s)
 
 def test_scalar_multiplication_and_division():
     m = Unit("m", 1.0, LENGTH)
-    q = 2 @ m
+    q = 2 * m
 
     q2 = q * 3
     q3 = 3 * q
@@ -45,7 +45,7 @@ def test_scalar_multiplication_and_division():
 def test_quantity_times_quantity():
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TEMPERATURE)
-    q = (2 @ m) * (3 @ s)  # -> 6 m·s
+    q = (2 * m) * (3 * s)  # -> 6 m·s
 
     assert q.dim == dim_mul(LENGTH, TEMPERATURE)
     assert q.unit.name == "m·s"
@@ -54,7 +54,7 @@ def test_quantity_times_quantity():
 def test_quantity_div_quantity():
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TEMPERATURE)
-    q = (10 @ m) / (2 @ s)  # -> 5 m/s
+    q = (10 * m) / (2 * s)  # -> 5 m/s
 
     assert q.dim == dim_div(LENGTH, TEMPERATURE)
     assert q.unit.name == "m/s"
@@ -62,7 +62,7 @@ def test_quantity_div_quantity():
 
 def test_scalar_divided_by_quantity():
     m = Unit("m", 1.0, LENGTH)
-    q = 2 / (2 @ m)  # -> 1 (1/m)
+    q = 2 / (2 * m)  # -> 1 (1/m)
 
     assert q.dim == dim_div(DIM_0, LENGTH)
     assert q.unit.name == "1/m"
@@ -78,7 +78,7 @@ def test_quantity_times_unit_basic():
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TIME)
 
-    q = (2 @ m) * s  # → 2 m·s
+    q = (2 * m) * s  # → 2 m·s
 
     assert isinstance(q, Quantity)
     assert q.dim == dim_mul(LENGTH, TIME)
@@ -91,7 +91,7 @@ def test_quantity_times_unit_with_prefix_does_not_change_numeric_value():
     cm = Unit("cm", 0.01, LENGTH)
     m = Unit("m", 1.0, LENGTH)
 
-    q_cm = 300 @ cm   # SI = 3.0 m
+    q_cm = 300 * cm   # SI = 3.0 m
     out = q_cm * m    # new_unit scale = 0.01, constructor multiplies again
 
     assert out.dim == dim_mul(LENGTH, LENGTH)
@@ -107,7 +107,7 @@ def test_quantity_times_unit_does_not_mutate_original():
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TIME)
 
-    q = 5 @ m
+    q = 5 * m
     _ = q * s
 
     # original unchanged
@@ -123,7 +123,7 @@ def test_quantity_div_unit_basic():
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TIME)
 
-    q = (10 @ m) / s  # → 10 m/s
+    q = (10 * m) / s  # → 10 m/s
 
     assert isinstance(q, Quantity)
     assert q.dim == dim_div(LENGTH, TIME)
@@ -135,7 +135,7 @@ def test_quantity_div_unit_dimensionless_normalization():
     """With current impl, quantity / unit yields DIM_0 but keeps a composed name (e.g., 'm/m')."""
     m = Unit("m", 1.0, LENGTH)
 
-    q = (7 @ m) / m   # DIM_0, but name not normalized in this code path
+    q = (7 * m) / m   # DIM_0, but name not normalized in this code path
 
     assert q.dim == DIM_0
     # Current behavior: not normalized to empty name for quantity ÷ unit
@@ -150,7 +150,7 @@ def test_quantity_div_unit_with_prefix_dimensionless_value_is_correct():
     cm = Unit("cm", 0.01, LENGTH)
     m = Unit("m", 1.0, LENGTH)
 
-    q = (200 @ cm) / m  # 200 cm / 1 m -> 2 (dimensionless)
+    q = (200 * cm) / m  # 200 cm / 1 m -> 2 (dimensionless)
 
     assert q.dim == DIM_0
     # Current behavior keeps 'cm/m' (scale 0.01) rather than empty name
@@ -164,7 +164,7 @@ def test_quantity_div_unit_does_not_mutate_original():
     m = Unit("m", 1.0, LENGTH)
     s = Unit("s", 1.0, TIME)
 
-    q = 12 @ m
+    q = 12 * m
     _ = q / s
 
     # original unchanged

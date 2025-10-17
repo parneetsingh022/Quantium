@@ -86,7 +86,7 @@ class Unit:
             and isclose(self.scale_to_si, other.scale_to_si, rel_tol=1e-12, abs_tol=0.0)
         )
         
-    def __rmatmul__(self, value: float) -> Quantity:
+    def __rmul__(self, value: float) -> Quantity:
         return Quantity(float(value), self)
     
     def __mul__(self, other: "Unit") -> "Unit":
