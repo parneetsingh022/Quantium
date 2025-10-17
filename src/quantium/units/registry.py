@@ -206,20 +206,20 @@ class UnitsRegistry:
     
 
 class UnitNamespace:
-    def __init__(self, reg : "UnitsRegistry"):
+    def __init__(self, reg : "UnitsRegistry") -> None:
         self._reg = reg
 
-    def __call__(self, spec : "str"):
+    def __call__(self, spec : "str") -> "Unit":
         return self._reg.get(spec)
     
-    def __getattr__(self, name: str) -> Unit:
+    def __getattr__(self, name: "str") -> "Unit":
         try:
             return self._reg.get(name)
         except (KeyError, ValueError) as e:
             # Unknown symbol should look like a missing attribute
             raise AttributeError(name) from e
         
-    def __dir__(self):
+    def __dir__(self) -> list[str]:
         """List all available unit symbols for autocomplete."""
         # start with object + class attributes (normal methods, etc.)
         base_dir = set(super().__dir__())
