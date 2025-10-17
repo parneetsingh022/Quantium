@@ -164,6 +164,9 @@ class UnitsRegistry:
         with self._lock:
             return dict(self._units)
         
+    def as_namespace(self) -> UnitNamespace:
+        return UnitNamespace(self)
+        
 
     # ------------------------- internals -----------------------------------
     def _split_prefix(self, symbol: str) -> Tuple[Optional[str], str]:
@@ -200,6 +203,39 @@ class UnitsRegistry:
         new_unit = Unit(sym, base.scale_to_si * factor, base.dim)
         self._units[sym] = new_unit
         return new_unit
+    
+
+class UnitNamespace:
+    def __init__(self, reg : "UnitsRegistry"):
+        self._reg = reg
+
+    def __call__(self, spec : "str"):
+        return self._reg.get(spec)
+    
+    def __getattr__(self, name: str) -> Unit:
+        try:
+            return self._reg.get(name)
+        except (KeyError, ValueError) as e:
+            # Unknown symbol should look like a missing attribute
+            raise AttributeError(name) from e
+        
+    def __dir__(self):
+        """List all available unit symbols for autocomplete."""
+        # start with object + class attributes (normal methods, etc.)
+        base_dir = set(super().__dir__())
+        # include registered unit symbols
+        try:
+            units = set(self._reg.all().keys())
+        except Exception:
+            units = set()
+        # include known aliases
+        try:
+            aliases = set(self._reg._aliases.keys())
+        except Exception:
+            aliases = set()
+        return sorted(base_dir | units | aliases)
+    
+
 
 
 # ---------------------------------------------------------------------------
