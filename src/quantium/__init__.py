@@ -5,13 +5,18 @@ Quantium provides tools for defining, manipulating, and validating physical quan
 units, ensuring robust and expressive modeling across scientific and engineering workflows.
 """
 
+from quantium.units.registry import DEFAULT_REGISTRY
 
 __version__ = "0.0.1a0"
 __author__ = "Parneet Sidhu"
 __license__ = "MIT"
 
+u = DEFAULT_REGISTRY.as_namespace()
+
 __all__ = [
     "__version__", 
     "__author__", 
     "__license__",
+
+    "u" # Unit Namespace for Default Registry
 ]

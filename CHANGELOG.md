@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Units and quantities now support string-based compound expressions in `.get()` and `.to()` (e.g., `"m/s**2"`, `"(W*s)/(N*s/m**2)"`, `"1/s"`), enabling intuitive text-based conversions and registry lookups for mixed or derived units.
 
+- Added `UnitNamespace` to provide a user-friendly interface for accessing units
 
 ## [0.0.1a0] - 2025-10-09
 ### Added
