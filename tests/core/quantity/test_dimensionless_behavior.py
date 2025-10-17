@@ -47,8 +47,8 @@ def test_dimensionless_result_is_si_and_correct(sym_a, val_a, sym_b, val_b):
     ua = ureg.get(sym_a)
     ub = ureg.get(sym_b)
 
-    qa = val_a @ ua
-    qb = val_b @ ub
+    qa = val_a * ua
+    qb = val_b * ub
 
     r = qa / qb
 

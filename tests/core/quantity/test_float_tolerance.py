@@ -26,8 +26,8 @@ def test_quantity_equality_tolerates_si_float_drift():
     m = Unit("m", 1.0, LENGTH)
     a = Unit("a", 0.1, LENGTH)
 
-    q1 = 3 @ a      # _mag_si ~ 0.30000000000000004
-    q2 = 0.3 @ m    # _mag_si ~ 0.29999999999999999
+    q1 = 3 * a      # _mag_si ~ 0.30000000000000004
+    q2 = 0.3 * m    # _mag_si ~ 0.29999999999999999
 
     # Exact equality on _mag_si will fail. After fix, should pass.
     assert q1 == q2, f"_mag_si differ slightly: {q1._mag_si} vs {q2._mag_si}"
@@ -38,8 +38,8 @@ def test_dimensionless_ratio_avoids_float_drift():
     m = Unit("m", 1.0, LENGTH)
     a = Unit("a", 0.1, LENGTH)
 
-    num = 3 @ a       # SI ~ 0.30000000000000004
-    den = 0.3 @ m     # SI ~ 0.29999999999999999
+    num = 3 * a       # SI ~ 0.30000000000000004
+    den = 0.3 * m     # SI ~ 0.29999999999999999
     r = num / den     # should be dimensionless 1
 
     # 1) Dimensionless dim

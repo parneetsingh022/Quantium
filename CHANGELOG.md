@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Change
 - Removed old `get_unit()` function and introduced new UnitRegistry class with `register()`, `register_alias()`, `has()`, `get()`, `all()` functions.
+- Replaced the `@` operator (`4 @ unit`) with the standard multiplication operator (`4 * unit`) for creating quantities.
 
 ### Added
 - Support for unit algebra: units can now be combined using multiplication (`*`), division (`/`), and exponentiation (`**`) to produce new derived units with correct dimensional analysis (e.g., `m/s`, `m^2`, `N·m`, etc.).

@@ -153,10 +153,10 @@ def test_kelvin_equivalent_units_mul_div_pretty_output():
     # Rename the left operand to "kelvin" to exercise name-collapsing preference.
     k_named = kelvin.as_name("kelvin")
 
-    q1 = (100 @ k_named) * (10 @ dreg.get("K"))
-    q2 = (10 @ dreg.get("K")) * (100 @ k_named)
-    q3 = (100 @ k_named) / (10 @ dreg.get("K"))
-    q4 = (10 @ dreg.get("K")) / (100 @ k_named)
+    q1 = (100 * k_named) * (10 * dreg.get("K"))
+    q2 = (10 * dreg.get("K")) * (100 * k_named)
+    q3 = (100 * k_named) / (10 * dreg.get("K"))
+    q4 = (10 * dreg.get("K")) / (100 * k_named)
 
     # Exact repr/print expectations (note: uses the superscript ² character)
     assert repr(q1) == "1000 kelvin²"
@@ -171,7 +171,7 @@ def test_kelvin_equivalent_units_mul_div_pretty_output():
 
 def test_unit_rmatmul_creates_quantity_with_unit():
     m = Unit("m", 1.0, LENGTH)
-    q = 5 @ m
+    q = 5 * m
     from quantium.core.quantity import Quantity
     assert isinstance(q, Quantity)
     assert q.unit is m
