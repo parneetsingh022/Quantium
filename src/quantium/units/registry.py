@@ -121,7 +121,7 @@ class UnitsRegistry:
         return normalize_symbol(symbol) in self._non_prefixable
 
     # -------------------------- public API ---------------------------------
-    def register(self, unit: Unit, replace = False) -> None:
+    def register(self, unit: Unit, replace : bool = False) -> None:
         """Register (or overwrite if replace is True) a `Unit` under its canonical name.
 
         Use `register_alias` to add additional spellings without duplication.
@@ -157,7 +157,7 @@ class UnitsRegistry:
             
             self._units[unit.name] = unit
 
-    def register_alias(self, alias: str, canonical: str, replace=False) -> None:
+    def register_alias(self, alias: str, canonical: str, replace : bool = False) -> None:
         # 1) normalized form (keeps current behavior; e.g., 'ohm' -> 'Ω')
         norm_key = normalize_symbol(alias)
 
@@ -276,7 +276,7 @@ class UnitNamespace:
     def __contains__(self, spec: str) -> bool:
         return self._reg.has(spec)
 
-    def define(self, expr : str, scale : "float|int", reference : "Unit", replace=False) -> None:
+    def define(self, expr : str, scale : "float|int", reference : "Unit", replace : bool = False) -> None:
         self._reg.register(Unit(expr, float(scale) * reference.scale_to_si , reference.dim), replace)
 
     def __call__(self, spec : "str") -> "Unit":
