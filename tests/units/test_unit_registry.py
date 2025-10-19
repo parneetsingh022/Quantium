@@ -24,10 +24,11 @@ from quantium.core.dimensions import (
 )
 from quantium.core.quantity import Unit
 
+
 # We import the module under test once, and access internals we intentionally
 # rely on in tests (like _bootstrap_default_registry).
 import quantium.units.registry as regmod
-from quantium.units.registry import UnitsRegistry
+from quantium.units.registry import UnitsRegistry, UnitNamespace
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -550,3 +551,294 @@ def test_thread_safety_compound_get(reg):
     # verify a couple of expected dims quickly
     assert any(u.dim == dim_div(LENGTH, TIME) for u in outs)        # m/s cases
     assert any(u.dim == dim_pow(TIME, -1) for u in outs)            # 1/s cases
+
+
+# ---------------------------------------------------------------------------
+# Alias replacement over existing unit symbols
+# ---------------------------------------------------------------------------
+
+
+def test_register_alias_replace_overwrites_existing_symbol(reg):
+    # Sanity: base meter vs millimeter scales/dims differ by 1e-3
+    m = reg.get("m")
+    mm = reg.get("mm")  # synthesized on demand
+    assert mm.dim == m.dim
+    assert mm.scale_to_si == pytest.approx(1e-3)
+
+    # Now deliberately SHADOW the existing symbol 'm' so that lookups for 'm' resolve to 'mm'
+    reg.register_alias("m", "mm", replace=True)
+
+    # After replacement, fetching 'm' should resolve via the alias to the canonical 'mm'
+    m_after = reg.get("m")
+    assert m_after is mm                 # exact same Unit object
+    assert m_after.scale_to_si == pytest.approx(1e-3)
+
+    # And fetching by canonical 'mm' is unchanged
+    assert reg.get("mm") is mm
+
+# ---------------------------------------------------------------------------
+# register_alias(..., replace=...) behavior
+# ---------------------------------------------------------------------------
+
+def test_register_alias_conflict_requires_replace(reg):
+    # 'm' is an existing UNIT symbol; registering it as an alias without replace must fail
+    with pytest.raises(ValueError):
+        reg.register_alias("m", "mm")
+
+
+def test_register_alias_replace_allows_shadowing_unit_symbol(reg):
+    # Sanity: meter vs millimeter scales/dims
+    m = reg.get("m")
+    mm = reg.get("mm")
+    assert mm.dim == m.dim
+    assert mm.scale_to_si == pytest.approx(1e-3)
+
+    # With replace=True we can intentionally shadow an existing unit symbol
+    reg.register_alias("m", "mm", replace=True)
+
+    # After replacement, lookups of 'm' resolve through the alias
+    assert reg.get("m") is mm
+    # And canonical path remains unchanged
+    assert reg.get("mm") is mm
+
+
+def test_register_alias_requires_replace_to_repoint_existing_alias(reg):
+    # 'ohm' is pre-registered as an alias for 'Ω' in the bootstrapped registry.
+    # Attempting to repoint an existing alias without replace=True
+    # should raise a ValueError (preventing accidental alias reassignment).
+    V = reg.get("V")
+
+    with pytest.raises(ValueError):
+        reg.register_alias("ohm", "V")  # repoint alias 'ohm' → 'V' should fail
+
+    # The alias should still point to its original target ('Ω')
+    ohm_unit = reg.get("ohm")
+    omega_unit = reg.get("Ω")
+
+    assert ohm_unit is omega_unit
+    assert ohm_unit is not V
+
+
+
+def test_register_alias_normalizes_alias_key(reg):
+    # normalize_symbol should be applied to the alias key
+    # Mixed-case key should still be usable via its normalized form.
+    reg.register_alias("MiXeD_Key", "m")
+    # Expect to retrieve via normalized lookup (likely lowercase)
+    assert reg.get("mixed_key") is reg.get("m")
+
+
+def test_register_alias_thread_safe_single_mapping(reg):
+    # Smoke test: many threads try to register the same alias → same canonical
+    errs = []
+    def worker():
+        try:
+            reg.register_alias("alias_concurrent", "s")
+        except Exception as e:
+            errs.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(32)]
+    for t in threads: 
+        t.start()
+    for t in threads: 
+        t.join()
+
+    assert not errs
+    # Alias must resolve to the exact same Unit object as 's'
+    assert reg.get("alias_concurrent") is reg.get("s")
+
+# ---------------------------------------------------------------------------
+# UnitNamespace.define behavior + UnitNamespace convenience features
+# ---------------------------------------------------------------------------
+
+
+def test_namespace_define_basic_scale_and_dim(reg):
+    ns = UnitNamespace(reg)
+    # Define a whimsical length unit: 1 smoot = 1.7018 m
+    ns.define("smoot", 1.7018, reg.get("m"))
+    smoot = reg.get("smoot")
+    m = reg.get("m")
+    assert smoot.dim == m.dim
+    assert smoot.scale_to_si == pytest.approx(1.7018)
+
+    # Access via __call__ and attribute should be the same object
+    assert ns("smoot") is smoot
+    assert ns.smoot is smoot
+
+
+def test_namespace_define_with_non_si_reference(reg):
+    ns = UnitNamespace(reg)
+    # 'min' is 60 s; define half_min as 0.5 * min → 30 s
+    ns.define("half_min", 0.5, reg.get("min"))
+    half_min = reg.get("half_min")
+    s = reg.get("s")
+    assert half_min.dim == s.dim
+    assert half_min.scale_to_si == pytest.approx(30.0)
+
+
+def test_namespace_define_conflict_requires_replace(reg):
+    ns = UnitNamespace(reg)
+    ns.define("qux", 2.0, reg.get("m"))  # 2 m
+    # redefining without replace must raise (delegates to registry.register)
+    with pytest.raises(ValueError):
+        ns.define("qux", 3.0, reg.get("m"))
+
+
+def test_namespace_define_replace_allows_overwrite(reg):
+    ns = UnitNamespace(reg)
+    ns.define("quux", 2.0, reg.get("m"))      # 2 m
+    assert reg.get("quux").scale_to_si == pytest.approx(2.0)
+
+    # Overwrite with a different scale via replace=True
+    ns.define("quux", 5.0, reg.get("m"), replace=True)
+    assert reg.get("quux").scale_to_si == pytest.approx(5.0)
+
+
+def test_namespace_dunder_call_and_attr_and_dir(reg):
+    ns = UnitNamespace(reg)
+
+    # __call__ should proxy to registry.get
+    assert ns("m") is reg.get("m")
+
+    # Unknown attribute should raise AttributeError (not ValueError)
+    with pytest.raises(AttributeError):
+        _ = ns.this_symbol_does_not_exist
+
+    # __dir__ should include units and known aliases (e.g., 'ohm' → 'Ω')
+    # and any unit we define.
+    ns.define("smoot", 1.7018, reg.get("m"))
+    entries = dir(ns)
+    # Known unit symbol
+    assert "m" in entries
+    # Known alias from the bootstrapped registry
+    assert "ohm" in entries
+    # Newly defined symbol
+    assert "smoot" in entries
+
+# ---------------------------------------------------------------------------
+# New behavior: alias stored as normalized + literal + casefolded keys
+# ---------------------------------------------------------------------------
+
+def test_alias_lookup_accepts_literal_and_casefold_variants(reg):
+    # No special normalization here; we want to exercise literal + casefolded keys
+    reg.register_alias("MiXeD_Key", "m")
+    # literal spelling works
+    assert reg.get("MiXeD_Key") is reg.get("m")
+    # casefolded spelling works (new behavior)
+    assert reg.get("mixed_key") is reg.get("m")
+
+
+def test_dir_includes_literal_alias_spelling(reg):
+    # The literal alias should show up in __dir__ (discoverability)
+    ns = reg.as_namespace()
+    reg.register_alias("myAlias", "s")
+    names = dir(ns)
+    assert "myAlias" in names     # literal
+    # normalized/casefold may also be present depending on other aliases you add,
+    # but the key requirement is the literal shows up.
+
+
+def test_ohm_variants_all_resolve_and_literal_shows_in_dir(reg):
+    ns = reg.as_namespace()
+    # Re-register to ensure behavior regardless of bootstrap order
+    reg.register_alias("ohm", "Ω", replace=True)
+    # All case variants should resolve (casefolded key)
+    for a in ["ohm", "Ohm", "OHM"]:
+        assert reg.get(a) is reg.get("Ω")
+    # dir should include a human-readable spelling (literal alias)
+    assert "ohm" in dir(ns)
+
+
+def test_repoint_alias_updates_target_all_variants(reg):
+    # Point a mixed-case alias at 'm', then repoint to 's'
+    reg.register_alias("MiXeD_Key", "m", replace=True)
+    assert reg.get("mixed_key") is reg.get("m")
+    reg.register_alias("MiXeD_Key", "s", replace=True)
+    # All spellings now resolve to 's'
+    assert reg.get("MiXeD_Key") is reg.get("s")
+    assert reg.get("mixed_key") is reg.get("s")
+
+
+def test_alias_still_resolves_to_same_unit_object(reg):
+    reg.register_alias("fortnight_alias", "fortnight", replace=True)
+    assert reg.get("fortnight_alias") is reg.get("fortnight")
+
+def test_membership_checks_consider_aliases(reg):
+    ns = reg.as_namespace()
+    reg.register_alias("alias_seconds", "s", replace=True)
+    assert "alias_seconds" in reg
+    assert "alias_seconds" in ns
+
+# ---------------------------------------------------------------------------
+# Unit vs. Alias name conflict checks (without replace=True)
+# ---------------------------------------------------------------------------
+def test_register_unit_conflict_with_existing_alias_raises(reg):
+    """
+    Tests that UnitRegistry.register() fails if the new unit's name
+    conflicts with an *existing alias*.
+    """
+    # 1. Setup: Create a unique, non-conflicting alias name
+    alias_name = "my_custom_alias"
+    reg.register_alias(alias_name, "m")
+    
+    # Sanity check: alias resolves correctly
+    assert reg.get(alias_name) is reg.get("m")
+
+    # 2. Action & Assert: Try to register a *unit* with the exact same name.
+    # This should fail because 'my_custom_alias' is already an alias key.
+    new_unit = Unit(alias_name, 1.2345, LENGTH)
+    with pytest.raises(ValueError):
+        reg.register(new_unit)
+
+
+def test_register_alias_conflict_with_existing_unit_raises(reg):
+    """
+    Tests that UnitRegistry.register_alias() fails if the new alias name
+    conflicts with an *existing unit symbol* (when replace=False).
+    """
+    # 1. Setup: 'm' (meter) is a guaranteed registered base unit.
+    assert "m" in reg.all() # Check it's a unit symbol
+
+    # 2. Action & Assert: Try to register an *alias* with the name 'm'
+    # This should fail because 'm' is already a registered unit symbol.
+    with pytest.raises(ValueError):
+        reg.register_alias("m", "s") # Try to make 'm' (a unit) an alias for 's'
+
+def test_register_alias_conflict_with_casefolded_unit_name_raises(reg):
+    """
+    Tests the specific bug where an alias conflicts with an existing unit
+    symbol via case-folding, which the original code missed.
+    """
+    # 1. Arrange: Register a unit with a simple, lowercase name.
+    unit_name = "conflict_unit"
+    reg.register(Unit(unit_name, 1.0, LENGTH))
+
+    # Define an alias that is the same as the unit name, but with a different case.
+    conflicting_alias = "CONFLICT_UNIT"
+
+    # 2. Act & Assert: Attempt to register the conflicting alias.
+    # The old, buggy code would FAIL to raise an error here, creating an
+    # inconsistent state because "CONFLICT_UNIT".casefold() == "conflict_unit".
+    # The new, fixed code correctly detects this conflict and raises a ValueError.
+    with pytest.raises(ValueError, match="a unit with the name 'conflict_unit' already exists"):
+        reg.register_alias(conflicting_alias, "s")
+
+
+def test_register_alias_conflict_with_normalized_unit_name_raises(reg):
+    """
+    Tests the bug from another angle: an alias conflicts with an existing
+    unit symbol via normalization (e.g., 'u' vs 'µ').
+    """
+    # 1. Arrange: Register the canonical micro-ampere unit.
+    unit_name = "µA"
+    reg.register(Unit(unit_name, 1e-6, LENGTH))
+
+    # Define an alias that uses the ASCII 'u' fallback for the micro prefix.
+    conflicting_alias = "uA"
+
+    # 2. Act & Assert: Attempt to register the conflicting alias.
+    # The old code would miss this because 'uA' is not literally in self._units.
+    # The new code normalizes the alias to 'µA' *before* checking for
+    # conflicts and correctly raises the error.
+    with pytest.raises(ValueError, match="a unit with the name 'µA' already exists"):
+        reg.register_alias(conflicting_alias, "s")
