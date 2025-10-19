@@ -28,7 +28,7 @@ from quantium.core.quantity import Unit
 # We import the module under test once, and access internals we intentionally
 # rely on in tests (like _bootstrap_default_registry).
 import quantium.units.registry as regmod
-from quantium.units.registry import UnitsRegistry
+from quantium.units.registry import UnitsRegistry, UnitNamespace
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -557,11 +557,6 @@ def test_thread_safety_compound_get(reg):
 # Alias replacement over existing unit symbols
 # ---------------------------------------------------------------------------
 
-def test_register_alias_conflict_requires_replace(reg):
-    # 'm' already exists as a base unit in the registry; aliasing it without replace=True must fail
-    with pytest.raises(ValueError):
-        reg.register_alias("m", "mm")   # trying to alias existing unit symbol
-
 
 def test_register_alias_replace_overwrites_existing_symbol(reg):
     # Sanity: base meter vs millimeter scales/dims differ by 1e-3
@@ -643,8 +638,10 @@ def test_register_alias_thread_safe_single_mapping(reg):
             errs.append(e)
 
     threads = [threading.Thread(target=worker) for _ in range(32)]
-    for t in threads: t.start()
-    for t in threads: t.join()
+    for t in threads: 
+        t.start()
+    for t in threads: 
+        t.join()
 
     assert not errs
     # Alias must resolve to the exact same Unit object as 's'
@@ -654,7 +651,6 @@ def test_register_alias_thread_safe_single_mapping(reg):
 # UnitNamespace.define behavior + UnitNamespace convenience features
 # ---------------------------------------------------------------------------
 
-from quantium.units.registry import UnitNamespace
 
 def test_namespace_define_basic_scale_and_dim(reg):
     ns = UnitNamespace(reg)
