@@ -344,7 +344,7 @@ class Quantity:
 
         # Dimensionless: print bare number
         if self.dim == DIM_0:
-            return f"{mag:g}"
+            return f"{mag:.15g}"
 
         # Start from the user’s unit name (keeps cm/ms etc.), with superscripts & cancellation
         pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
@@ -372,7 +372,7 @@ class Quantity:
                     # else: keep the composed pretty name as-is
 
         # If the pretty name reduces to "1", show just the number
-        return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
+        return f"{mag:.15g}" if pretty == "1" else f"{mag:.15g} {pretty}"
 
 
     
