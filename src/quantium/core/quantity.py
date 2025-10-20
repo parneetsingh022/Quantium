@@ -342,12 +342,12 @@ class Quantity:
         # Numeric magnitude in the *current* unit
         mag = self._mag_si / self.unit.scale_to_si
 
-        # Start from the user’s unit name (keeps cm/ms etc.), with superscripts & cancellation
-        pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
-
         # Dimensionless: print bare number
         if self.dim == DIM_0:
             return f"{mag:g}"
+
+        # Start from the user’s unit name (keeps cm/ms etc.), with superscripts & cancellation
+        pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
 
         # Only consider upgrading when the current unit *looks composed*.
         # We do NOT override atomic SI symbols like Pa, Hz, Bq, Gy, Sv, ...
