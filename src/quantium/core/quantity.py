@@ -28,7 +28,9 @@ import re
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
 from quantium.units.parser import extract_unit_expr
+from typing import Union
 
+Number = Union[int, float]
 _POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
 
 def _normalize_power_name(name: str) -> str:
@@ -278,7 +280,7 @@ class Quantity:
             raise TypeError("Sub requires same dimensions")
         return Quantity((self._mag_si - other._mag_si)/self.unit.scale_to_si, self.unit)
     
-    def __mul__(self, other: "Quantity | float | int") -> "Quantity":
+    def __mul__(self, other: "Quantity | Unit | Number") -> "Quantity":
         # scalar × quantity
         if isinstance(other, (int, float)):
             return Quantity((self._mag_si * float(other)) / self.unit.scale_to_si, self.unit)
@@ -298,7 +300,7 @@ class Quantity:
         # allows 3 * (2 m) -> 6 m
         return self.__mul__(other)
 
-    def __truediv__(self, other: "Quantity | float | int") -> "Quantity":
+    def __truediv__(self, other: "Quantity | Unit | Number") -> "Quantity":
         # quantity / scalar
         if isinstance(other, (int, float)):
             return Quantity((self._mag_si / float(other)) / self.unit.scale_to_si, self.unit)
@@ -340,12 +342,12 @@ class Quantity:
         # Numeric magnitude in the *current* unit
         mag = self._mag_si / self.unit.scale_to_si
 
-        # Start from the user’s unit name (keeps cm/ms etc.), with superscripts & cancellation
-        pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
-
         # Dimensionless: print bare number
         if self.dim == DIM_0:
-            return f"{mag:g}"
+            return f"{mag:.15g}"
+
+        # Start from the user’s unit name (keeps cm/ms etc.), with superscripts & cancellation
+        pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
 
         # Only consider upgrading when the current unit *looks composed*.
         # We do NOT override atomic SI symbols like Pa, Hz, Bq, Gy, Sv, ...
@@ -370,7 +372,7 @@ class Quantity:
                     # else: keep the composed pretty name as-is
 
         # If the pretty name reduces to "1", show just the number
-        return f"{mag:g}" if pretty == "1" else f"{mag:g} {pretty}"
+        return f"{mag:.15g}" if pretty == "1" else f"{mag:.15g} {pretty}"
 
 
     
