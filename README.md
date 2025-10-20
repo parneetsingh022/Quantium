@@ -8,9 +8,13 @@
        height="300">
 </p>
 
-<p>
-  Quantium is a lightweight Python library for mathematical and scientific computations with units. It enables dimensional analysis and unit-safe calculations through a simple, dependency-minimal design. NumPy integration is planned for future releases.
-</p>
+### Readable units. Reliable math.
+
+Quantium is a lightweight Python library for unit-safe scientific and mathematical computation.
+It combines a clean, dependency-minimal architecture with a powerful system for dimensional analysis — ensuring that every calculation you perform respects physical consistency.
+
+Beyond correctness, Quantium emphasizes clarity.
+Its advanced formatting engine automatically simplifies, normalizes, and beautifully renders units using Unicode superscripts, SI prefixes, and canonical symbols.
 
 ## Installation & Setup
 Quantium can be installed from the Python Package Index (PyPI):
