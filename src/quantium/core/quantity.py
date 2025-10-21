@@ -213,8 +213,12 @@ class Quantity:
         if new_unit.dim != self.dim:
             raise TypeError("Dimension mismatch in conversion")
         
-        #Avoid allocating when the unit is already equivalent (same dim and scale)
-        if new_unit == self.unit:  # same dim + scale_to_si within tolerance
+        # Optimization: Avoid re-allocating if the target unit is
+        # *already* our current unit (same name AND dim).
+        # We must check name, as 'V/m' == 'W/(A·m)' is True physically,
+        # but the user's intent in to() is to get the new name.
+        # The dim check has already passed at this point.
+        if new_unit.name == self.unit.name:
             return self
         
         return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
