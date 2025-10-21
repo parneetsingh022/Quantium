@@ -3,6 +3,7 @@ import pytest
 from quantium.core.dimensions import LENGTH, TEMPERATURE,TIME, DIM_0
 from quantium.core.quantity import Quantity, Unit
 from quantium.units.registry import DEFAULT_REGISTRY as dreg
+from quantium import u
 # -------------------------------
 # Quantity: basics & conversion
 # -------------------------------
@@ -208,6 +209,61 @@ def test_to_string_with_ohm_alias_normalization():
     assert out.unit.name == "Ω"
     assert out.dim == q.dim
 
+
+# --------------------------------------------------------
+# Tests conversion from one naming system to other
+# --------------------------------------------------------
+
+def test_to_physically_equivalent_different_name():
+    """
+    Tests the bug fix: converting to a unit that is physically
+    identical but has a different name should return a NEW object.
+    """
+    q1 = Quantity(5.0, u.W/(u.A*u.m))  # 5.0 W/(A·m)
+
+    # Test conversion using a Unit object
+    q2 = q1.to(u.V/u.m)            # Convert to V/m
+
+    # 1. Check physical equivalence (value is the same)
+    assert q1 == q2
+    assert f"{q2}" == "5 V/m"
+
+    # 2. Check that it is a NEW object with the new unit name
+    assert q1 is not q2
+    assert q2.unit.name == 'V/m'
+    assert q1.unit.name == 'W/(A·m)' # Original is unchanged
+
+    # Test conversion using a string name
+    q3 = q1.to("V/m")            # Convert to V/m
+
+    # 3. Check physical equivalence
+    assert q1 == q3
+    assert f"{q3}" == "5 V/m"
+
+    # 4. Check that it is a NEW object
+    assert q1 is not q3
+    assert q3.unit.name == 'V/m'
+
+def test_to_identical_name_optimization():
+    """
+    Tests the optimization path: converting to the *exact same unit*
+    (identical name) should return the SAME object (`self`).
+    """
+    q1 = Quantity(10.0, u.V/u.m)  # 10.0 V/m
+
+    # Test conversion using the *same* Unit object
+    q2 = q1.to(u.V/u.m)
+
+    # Check that it returned the *exact same object*
+    assert q1 is q2
+    assert f"{q2}" == "10 V/m"
+
+    # Test conversion using the *same* string name
+    q3 = q1.to("V/m")
+
+    # Check that this also returned the *exact same object*
+    assert q1 is q3
+    assert f"{q3}" == "10 V/m"
 
 # ----------------------------
 # Identity / fast path
