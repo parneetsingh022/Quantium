@@ -165,9 +165,6 @@ class Unit:
 
         new_scale = self.scale_to_si ** n
         return Unit(normalized_name, new_scale, new_dim)
-    
-    def as_name(self, name : str) -> Unit:
-        return Unit(name, self.scale_to_si, self.dim)
 
 
 class Quantity:
@@ -361,10 +358,6 @@ class Quantity:
         si_name = format_dim(self.dim)  # e.g., "kg·m/s²", "1/s", "m"
         si_unit = Unit(si_name, 1.0, self.dim)
         return Quantity(self._mag_si, si_unit)
-
-    def as_name(self, name: str) -> Quantity:
-        """Return a copy of this quantity with the same value and dimension but a new unit name."""
-        return Quantity(self._mag_si, self.unit.as_name(name))
 
     @property
     def si(self) -> Quantity:
