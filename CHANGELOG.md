@@ -26,7 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Units and quantities now support string-based compound expressions in `.get()` and `.to()` (e.g., `"m/s**2"`, `"(W*s)/(N*s/m**2)"`, `"1/s"`), enabling intuitive text-based conversions and registry lookups for mixed or derived units.
 
-- Added `UnitNamespace` to provide a user-friendly interface for accessing units
+- Added `UnitNamespace` to provide a user-friendly interface for accessing units.
+
+- Added full set of comparison operators (==, !=, <, <=, >, >=) to the Quantity class. Equality comparisons (==, !=, <=, >=) automatically account for small floating-point rounding errors.
+
+- Added .as_key(precision=12) method to Quantity to provide a safe, explicit way to create hashable keys for use in dictionaries and sets.
 
 ## [0.0.1a0] - 2025-10-09
 ### Added

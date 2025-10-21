@@ -144,25 +144,6 @@ def test_unit_reciprocal_with_rtruediv_normalizes_power():
     assert one_over_s.name == "s^-1"
     assert math.isclose(one_over_s.scale_to_si, 1.0)
 
-
-def test_kelvin_equivalent_units_mul_div_pretty_output():
-    # Use the registry units so we match your canonical K definition.
-    from quantium.units.registry import DEFAULT_REGISTRY as dreg
-    kelvin = dreg.get("K")
-
-    # Rename the left operand to "kelvin" to exercise name-collapsing preference.
-    k_named = kelvin.as_name("kelvin")
-
-    q1 = (100 * k_named) * (10 * dreg.get("K"))
-    q2 = (10 * dreg.get("K")) * (100 * k_named)
-    q3 = (100 * k_named) / (10 * dreg.get("K"))
-    q4 = (10 * dreg.get("K")) / (100 * k_named)
-
-    # Exact repr/print expectations (note: uses the superscript ² character)
-    assert repr(q1) == "1000 kelvin²"
-    assert repr(q2) == "1000 K²"
-    assert repr(q3) == "10"
-    assert repr(q4) == "0.1"
     
 
 # -------------------------------

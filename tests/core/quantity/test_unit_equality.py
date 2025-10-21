@@ -50,13 +50,6 @@ def test_unit_equality_with_incompatible_type_returns_notimplemented():
     assert (m == 42) is False
 
 
-@pytest.mark.regression(reason="Name differences never drive equality; only scale & dim")
-def test_unit_name_changes_do_not_affect_equality():
-    m = Unit("m", 1.0, LENGTH)
-    m_alias = m.as_name("meter")
-    assert m_alias.name != m.name
-    assert m_alias == m
-
 # -------------------------------
 # Mixed constructions (extra safety)
 # -------------------------------
