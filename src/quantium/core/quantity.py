@@ -191,6 +191,26 @@ class Quantity:
         self._mag_si = float(value) * unit.scale_to_si
         self.dim = unit.dim
         self.unit = unit
+        
+    def _check_dim_compatible(self, other: object) -> None:
+        """Internal helper to raise TypeError on dimension mismatch."""
+        if not isinstance(other, Quantity):
+            # Allow comparison with 0 (dimensionless)
+            if isinstance(other, (int, float)) and other == 0:
+                if self.dim != DIM_0:
+                    raise TypeError("Cannot compare a dimensioned quantity to 0")
+                return # It's a 0 dimensionless quantity, OK
+            raise TypeError(f"Cannot compare Quantity with type {type(other)}")
+
+        if self.dim != other.dim:
+            raise TypeError(
+                f"Cannot compare quantities with different dimensions: "
+                f"'{self.unit.name}' and '{other.unit.name}'"
+            )
+        
+    def _is_close(self, other_si_mag: float) -> bool:
+        """Internal helper for fuzzy equality."""
+        return isclose(self._mag_si, other_si_mag, rel_tol=1e-12, abs_tol=0.0)
     
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Quantity):
@@ -200,6 +220,84 @@ class Quantity:
             self.dim == other.dim
             and isclose(self._mag_si, other._mag_si, rel_tol=1e-12, abs_tol=0.0)
         )
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, Quantity):
+            return NotImplemented
+        if self.dim != other.dim:
+            return True # Not equal if dims don't match
+        return not self._is_close(other._mag_si)
+    
+    def __lt__(self, other: object) -> bool:
+        self._check_dim_compatible(other)
+        other_si_mag = getattr(other, '_mag_si', 0.0)
+        # Strictly less than AND not fuzzy-equal
+        return self._mag_si < other_si_mag and not self._is_close(other_si_mag)
+
+    def __le__(self, other: object) -> bool:
+        self._check_dim_compatible(other)
+        other_si_mag = getattr(other, '_mag_si', 0.0)
+        # Less than OR fuzzy-equal
+        return self._mag_si < other_si_mag or self._is_close(other_si_mag)
+
+    def __gt__(self, other: object) -> bool:
+        self._check_dim_compatible(other)
+        other_si_mag = getattr(other, '_mag_si', 0.0)
+        # Strictly greater than AND not fuzzy-equal
+        return self._mag_si > other_si_mag and not self._is_close(other_si_mag)
+
+    def __ge__(self, other: object) -> bool:
+        self._check_dim_compatible(other)
+        other_si_mag = getattr(other, '_mag_si', 0.0)
+        # Greater than OR fuzzy-equal
+        return self._mag_si > other_si_mag or self._is_close(other_si_mag)
+    
+    # --- Hashing Solution ---
+
+    def as_key(self, precision: int = 12) -> tuple:
+        """
+        Returns a hashable, discretized key for this quantity.
+
+        This is the recommended way to use Quantities in dictionaries
+        or sets, as it forces the user to choose a precision
+        level for "fuzzy" hashing.
+
+        The standard `__hash__` is not implemented because `__eq__`
+        uses `isclose`, which would violate the Python hash contract.
+
+        Usage:
+        >>> my_dict = {}
+        >>> q1 = (1.0 + 1e-13) * u.m
+        >>> q2 = (1.0 - 1e-13) * u.m
+        >>>
+        >>> # q1 and q2 are "equal" but not hash-equal
+        >>> q1 == q2  # True
+        >>>
+        >>> # Using as_key forces them to be hash-equal
+        >>> my_dict[q1.as_key(precision=9)] = "value"
+        >>> print(my_dict[q2.as_key(precision=9)])
+        "value"
+
+        Parameters
+        ----------
+        precision : int, optional
+            The number of decimal places to round the *SI magnitude*
+            to for hashing, by default 12 (which is typically
+            near 64-bit float precision limits).
+
+        Returns
+        -------
+        tuple
+            A hashable tuple of (dimension, rounded_si_magnitude).
+        """
+        # Round the SI magnitude to the specified precision
+        rounded_mag_si = round(self._mag_si, precision)
+        
+        # We must also handle -0.0 vs 0.0, which round identically
+        # but have different hashes.
+        if rounded_mag_si == 0.0:
+            rounded_mag_si = 0.0
+            
+        return (self.dim, rounded_mag_si)
 
     def to(self, new_unit: "Unit|str") -> Quantity:
         if(isinstance(new_unit, str)):
