@@ -148,6 +148,34 @@ def test_greater_than_or_equal():
     with pytest.raises(TypeError, match="different dimensions"):
         _ = q_1_A >= q_1_C
 
+def test_not_equal():
+    """Tests the __ne__ (!=) operator."""
+    
+    # 1. Different Dimensions (should be True)
+    q_m = Quantity(1.0, u.m)
+    q_kg = Quantity(1.0, u.kg)
+    assert q_m != q_kg
+
+    # 2. Same Dimension, Different Values (should be True)
+    q_1_m = Quantity(1.0, u.m)
+    q_2_m = Quantity(2.0, u.m)
+    assert q_1_m != q_2_m
+
+    # 3. Same Dimension, Same Values (should be False)
+    q_100_cm = Quantity(100.0, u.cm) # _mag_si = 1.0
+    assert not (q_1_m != q_100_cm) # not (1.0m != 1.0m) -> not(False)
+
+    # 4. Fuzzy Equality (should be False)
+    # These are "equal" via isclose, so they are *not* "not equal"
+    q_fuzzy = Quantity(1.0 + 1e-13, u.m)
+    assert q_1_m == q_fuzzy # Prerequisite check
+    assert not (q_1_m != q_fuzzy) # The real test
+
+    # 5. Strictly Not Equal (just outside tolerance) (should be True)
+    q_strict_ne = Quantity(1.0 + 1e-9, u.m)
+    assert not (q_1_m == q_strict_ne) # Prerequisite check
+    assert q_1_m != q_strict_ne # The real test
+
 
 # -------------------------------
 # Quantity equality (regressions)
