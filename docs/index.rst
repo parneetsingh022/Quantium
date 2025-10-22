@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Getting Started
+Installation & Setup
 =======================
 
 .. toctree::
@@ -11,18 +11,16 @@ Getting Started
    :caption: Overview
    :hidden:
 
-   Getting Started <self>
-   quantity/index
+   Installation & Setup <self>
+   Getting Started <getting_started/index>
 
 .. raw:: html
 
-   <div class="intro-container">
+      <div class="intro-container">
       <img src="_static/quantium_logo.png" alt="Quantium Logo">
       <div>
          <div>
-         <p><strong>Welcome to Quantium</strong> — a lightweight Python library for mathematical and scientific computations 
-         with units. It enables dimensional analysis and unit-safe calculations through a simple, dependency-minimal design. 
-         NumPy integration is planned for future releases.</p>
+         <p><strong>Welcome to Quantium</strong> —  a lightweight Python library for unit-safe scientific and mathematical computation. It combines a clean, dependency-minimal architecture with a powerful system for dimensional analysis — ensuring that every calculation you perform respects physical consistency.</p>
          </div>
 
          <!-- GitHub Buttons -->
