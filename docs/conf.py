@@ -38,11 +38,6 @@ html_theme_options = {
     # Handy keyboard nav (j/k) through the sidebar
     "navigation_with_keys": True,
 
-    "show_nav_level": 2,   # expand top levels so children appear
-    "show_toc_level": 2,   # (page-level right TOC depth)
-    "collapse_navigation": False,  # keep siblings like "Installation & Setup" visible
-    "navigation_depth": 4,         # show nested levels
-
     # Buttons above the content (shows "Edit on GitHub", source link)
     "top_of_page_buttons": [
         "edit",  # existing "Edit on GitHub"
