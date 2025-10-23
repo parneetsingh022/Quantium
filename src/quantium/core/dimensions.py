@@ -34,11 +34,11 @@ class Dimension(tuple):
     # --- Algebra (operator overloads) ---
     def __mul__(self, other: DimLike) -> "Dimension": # type: ignore[override]
         o = Dimension(other)
-        return Dimension(x + y for x, y in zip(self, o))
+        return Dimension(x + y for x, y in zip(self, o, strict=True))
 
     def __truediv__(self, other: DimLike) -> "Dimension":
         o = Dimension(other)
-        return Dimension(x - y for x, y in zip(self, o))
+        return Dimension(x - y for x, y in zip(self, o, strict=True))
 
     def __pow__(self, n: int) -> "Dimension":
         if not isinstance(n, int):
@@ -80,10 +80,10 @@ class Dimension(tuple):
     def __repr__(self) -> str:
         # readable, but still unambiguous
         names = ("L", "M", "T", "I", "Θ", "N", "J")
-        parts = "".join(f"[{n}^{v}]" for n, v in zip(names, self))
+        parts = "".join(f"[{n}^{v}]" for n, v in zip(names, self, strict=True))
 
         parts = ""
-        for n, v in zip(names, self):
+        for n, v in zip(names, self, strict=True):
             if v != 0:
                 parts += f"[{n}^{v}]"
 
