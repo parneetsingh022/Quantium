@@ -243,3 +243,50 @@ def test_to_string_dimensionless_no_change():
     out = q.to("1")
     assert out.dim == DIM_0
     assert math.isclose(shown(out), 5.0)
+
+# ----------------------------
+# VALUE PROPERTY
+# ----------------------------
+
+def test_quantity_value_property():
+    """Tests the new .value property."""
+    
+    # 1. Simple quantity in base unit
+    q_m = 3 * u.m
+    assert isinstance(q_m.value, float)
+    assert math.isclose(q_m.value, 3.0)
+
+    # 2. Simple quantity in non-base unit
+    q_cm = 200 * u.cm
+    assert math.isclose(q_cm.value, 200.0)
+
+    # 3. Quantity after conversion
+    # 200 cm -> 2 m
+    q_m_converted = q_cm.to(u.m)
+    assert math.isclose(q_m_converted.value, 2.0)
+    
+    # 4. Check that the original quantity's value is unchanged
+    assert math.isclose(q_cm.value, 200.0)
+
+    # 5. Complex quantity
+    q_accel = 9.8 * (u.m / u.s**2)
+    assert math.isclose(q_accel.value, 9.8)
+
+    # 6. Complex quantity after conversion
+    # 9.8 m/s^2 -> 980 cm/s^2
+    q_accel_cm = q_accel.to(u.cm / u.s**2)
+    assert math.isclose(q_accel_cm.value, 980.0)
+
+    # 7. Dimensionless quantity
+    q_dimless = (10 * u.m) / (5 * u.m)
+    assert q_dimless.dim == DIM_0
+    assert math.isclose(q_dimless.value, 2.0)
+    
+    # 8. Sanity check against your 'shown' helper
+    assert math.isclose(q_accel_cm.value, shown(q_accel_cm))
+
+    # 9. Test (int + Dimension)
+    # This fails because int.__add__ fails, and Dimension.__radd__
+    # correctly returns NotImplemented.
+    with pytest.raises(TypeError, match="unsupported operand type"):
+        _ = 1 + LENGTH

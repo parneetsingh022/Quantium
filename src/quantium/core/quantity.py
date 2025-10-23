@@ -362,6 +362,10 @@ class Quantity:
     @property
     def si(self) -> Quantity:
         return self.to_si()
+    
+    @property
+    def value(self) -> float:
+        return self._mag_si / self.unit.scale_to_si
 
     # arithmetic
     def __add__(self, other: Quantity) -> Quantity:

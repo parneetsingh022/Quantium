@@ -23,6 +23,7 @@ keywords = [
 ]
 
 dependencies = [
+  "typing-extensions"
   # "numpy>=1.26",
 ]
 
