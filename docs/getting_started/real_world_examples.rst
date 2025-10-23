@@ -130,21 +130,27 @@ Calculating pressure involves multiple derived units. Let's find the pressure ex
     from quantium import u
 
     force = 100 * u.N
-    area = 25 * u.m**2
+    area = 25 * u.cm**2
 
     pressure = force / area
+
+    # Auto detects Pa symbol and scale i.e. kPa
     print(pressure)
 
-    # Convert the result to other common pressure units
-    print(pressure.to(u.kPa))
-.. print(pressure.to(u.psi))
+    # In standard si unit
+    print(pressure.si)
+
+    # Convert to a different scale
+    print(pressure.to('uPa'))
+
 
 Output:
 
 .. code-block::
 
-    4 Pa
-    0.004 kPa
+    40 kPa
+    40000 Pa
+    40000000000 µPa
 
 .. --------------------------------------
 .. 6. Everyday Life: Fuel Efficiency

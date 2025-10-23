@@ -1,15 +1,19 @@
 from math import isclose
 import pytest
 
-from quantium.core.dimensions import LENGTH, MASS
+from quantium.core.dimensions import LENGTH, MASS, TIME
 from quantium.core.quantity import Unit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
 import quantium.core.utils as utils
+from quantium import u
 
 
 
 from tests.utils import _nop_prettifier
 from quantium.core import utils
+
+
+TIME_INV = TIME ** -1
 
 # -------------------------------
 # __repr__: pretty printing
@@ -494,3 +498,217 @@ def test_issue72_repr_cancellation_to_si_symbol(monkeypatch):
     # scale_to_si is 1.0
     # Logic upgrades to 'W'
     assert f"{q_W}" == "1 W"
+
+
+# --- Tests for __repr__ Auto-Prefixing of Composed Units ---
+
+@pytest.mark.regression(reason="Issue #75: Fix for non-standard SI scales in __repr__")
+def test_repr_upgrades_non_standard_scale_N_per_cm2():
+    """
+    Tests the original problem: 4 N/cm² (scale 10^4) should be
+    auto-formatted to 40 kPa (using engineering notation).
+    """
+    N = ureg.get("N")
+    cm = ureg.get("cm")
+
+    force = 100 * N
+    area = 25 * cm**2
+    pressure = force / area  # 4 N/cm²
+
+    # Check that the value is correct (4e4 Pa)
+    assert pressure.dim == u.Pa.dim
+    assert isclose(pressure._mag_si, 40000.0)
+    assert pressure.unit.name == "N/cm^2"
+    assert isclose(pressure.unit.scale_to_si, 10000.0)
+
+    # Check that __repr__ now correctly formats 4e4 Pa as 40 kPa
+    assert f"{pressure}" == "40 kPa"
+
+
+@pytest.mark.regression(reason="Issue #75: Fix for non-standard SI scales in __repr__")
+def test_repr_upgrades_non_standard_scale_kN_per_cm2():
+    """
+    Tests a more complex non-standard scale: 4 kN/cm² (scale 10^7)
+    should be auto-formatted to 40 MPa.
+    """
+    kN = ureg.get("kN")
+    cm = ureg.get("cm")
+
+    force = 100 * kN
+    area = 25 * cm**2
+    pressure = force / area  # 4 kN/cm²
+
+    # Check that the value is correct (4e7 Pa)
+    assert pressure.dim == u.Pa.dim
+    assert isclose(pressure._mag_si, 40_000_000.0)
+    assert pressure.unit.name == "kN/cm^2"
+    assert isclose(pressure.unit.scale_to_si, 10**7)
+
+    # Check that __repr__ now correctly formats 4e7 Pa as 40 MPa
+    assert f"{pressure}" == "40 MPa"
+
+
+@pytest.mark.regression(reason="Issue #75: Fix for non-standard SI scales in __repr__")
+def test_repr_upgrades_non_standard_scale_small_value():
+    """
+    Tests a non-standard small scale: 4 N/km² (scale 10^-6)
+    This scale *does* match a prefix (micro, µ), so the *old* logic
+    path should handle it correctly, formatting it as 4 µPa.
+    """
+    N = ureg.get("N")
+    km = ureg.get("km")
+
+    force = 100 * N
+    area = 25 * km**2
+    pressure = force / area  # 4 N/km²
+
+    # Check value (4e-6 Pa)
+    assert isclose(pressure._mag_si, 4.0e-6)
+    assert isclose(pressure.unit.scale_to_si, 1.0e-6)
+
+    # Check that __repr__ formats this as 4 µPa
+    # This confirms the pre-existing prefix-matching logic still works
+    assert f"{pressure}" == "4 µPa"
+
+
+# --- Tests to Confirm Regressions Stay Fixed ---
+
+@pytest.mark.regression(reason="Issue #75: Confirm fix for __repr__ bug #72")
+def test_repr_regression_fix_issue72_kg_mg_per_kg(monkeypatch):
+    """
+    Confirms that 'kg·mg/kg' is prettified to 'mg' *before*
+    the composed-unit check, preventing it from being upgraded to 'mkg'.
+    """
+    # This test doesn't need the nop_prettifier, it relies on the real one
+    import quantium.core.utils as utils
+    utils.invalidate_preferred_cache()
+
+    kg = ureg.get("kg")
+    mg = ureg.get("mg")
+
+    dose_rate = 15 * (mg / kg)
+    patient_mass = 75 * kg
+    required_dose = patient_mass * dose_rate  # 1125 kg·mg/kg
+
+    assert required_dose.unit.name == "kg·mg/kg"
+    assert required_dose.dim == MASS
+
+    # The fix ensures this prints "1125 mg", not "1.125 mkg"
+    assert f"{required_dose}" == "1125 mg"
+
+
+@pytest.mark.regression(reason="Issue #75: Confirm fix for __repr__ bug")
+def test_repr_regression_fix_keeps_non_si_unit(monkeypatch):
+    """
+    Confirms that a simple non-SI unit ('cm') is not auto-formatted
+    by the new logic.
+    """
+    _nop_prettifier(monkeypatch) # Use nop to check the raw unit name
+    import quantium.core.utils as utils
+    monkeypatch.setattr(utils, "preferred_symbol_for_dim", lambda d: "m", raising=True)
+
+    cm = Unit("cm", 0.01, LENGTH)
+    q = 2 * cm
+
+    # The fix ensures this prints "2 cm", not "20 mm"
+    assert repr(q) == "2 cm"
+
+
+@pytest.mark.regression(reason="Issue #75: Confirm fix for __repr__ bug")
+def test_repr_regression_fix_atomic_units_not_flipped(monkeypatch):
+    """
+    Confirms that atomic SI symbols (Bq, Hz) are not auto-formatted,
+    even though they share a dimension.
+    """
+    _nop_prettifier(monkeypatch)
+    import quantium.core.utils as utils
+    utils.invalidate_preferred_cache()
+    
+    Bq = ureg.get("Bq")
+    Hz = ureg.get("Hz")
+    q_Bq = 100 * Bq
+    q_Hz = 100 * Hz
+    
+    assert q_Bq.dim == TIME_INV
+    assert q_Hz.dim == TIME_INV
+
+    # The fix ensures these print as-is, not flipping to the other
+    assert f"{q_Bq}" == "100 Bq"
+    assert f"{q_Hz}" == "100 Hz"
+
+
+@pytest.mark.regression(reason="Issue #75: Confirm fix for __repr__ bug")
+def test_repr_regression_fix_format_si_works(monkeypatch):
+    """
+    Confirms that the ':si' formatter still works, as it relies on
+    __repr__ not re-formatting the base SI unit ('Pa').
+    """
+    _nop_prettifier(monkeypatch)
+
+    kPa = ureg.get("kPa")
+    uF = ureg.get("uF")
+    
+    p = 2 * kPa   # 2000 Pa
+    q = 3 * uF    # 3e-6 F
+
+    # p.to_si() creates a Quantity(2000, unit=Pa).
+    # The fix ensures repr(Quantity(2000, unit=Pa)) is "2000 Pa",
+    # not "2 kPa".
+    assert f"{p:si}" == "2000 Pa"
+
+    # q.to_si() creates Quantity(3e-6, unit=F).
+    # The fix ensures repr(Quantity(3e-6, unit=F)) is "3e-06 F",
+    # not "3 µF".
+    assert f"{q:si}" == "3e-06 F"
+
+@pytest.mark.regression(reason="Issue #75: Test __repr__ auto-prefixing for zero values")
+def test_repr_handles_zero_value_of_composed_unit(monkeypatch):
+    """
+    Tests the `if mag_si == 0.0:` branch.
+    Ensures that a zero-valued composed unit (like 0 N/cm²) is
+    formatted as '0 <BaseSISymbol>' (e.g., '0 Pa').
+    """
+    _nop_prettifier(monkeypatch) # Not strictly needed, but good for consistency
+    N = ureg.get("N")
+    cm = ureg.get("cm")
+
+    # Create a zero-value quantity with a composed unit
+    pressure = 0 * (N / cm**2)
+
+    assert isclose(pressure._mag_si, 0.0)
+    assert pressure.unit.name == "N/cm^2"
+    assert pressure.dim == u.Pa.dim
+
+    # The logic should catch mag_si == 0.0 and print '0 Pa'
+    assert f"{pressure}" == "0 Pa"
+
+    # Test another zero-value quantity
+    force = 0 * (ureg.get("kg") * ureg.get("m") / ureg.get("ms")**2)
+    assert isclose(force._mag_si, 0.0)
+    assert f"{force}" == "0 N"
+
+
+@pytest.mark.regression(reason="Issue #75: Test __repr__ auto-prefixing for base-range values")
+def test_repr_handles_base_unit_range_value(monkeypatch):
+    """
+    Tests the `if prefix_exp == 0:` branch.
+    Ensures that a composed unit whose SI value is in the base
+    range (e.g., 4.0 N/m² = 4.0 Pa) is correctly formatted
+    with the base SI symbol (e.g., '4 Pa').
+    """
+    _nop_prettifier(monkeypatch)
+    N = ureg.get("N")
+    m = ureg.get("m")
+
+    # This is the test case from your original example
+    force = 100 * N
+    area = 25 * m**2
+    pressure = force / area  # 4 N/m²
+
+    assert isclose(pressure._mag_si, 4.0)
+    assert pressure.unit.name == "N/m^2"
+    assert pressure.dim == u.Pa.dim
+
+    # The logic should find mag_si = 4.0, calculate prefix_exp = 0,
+    # and correctly format it as '4 Pa'.
+    assert f"{pressure}" == "4 Pa"

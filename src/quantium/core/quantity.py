@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isclose, isfinite
+import math
 import re
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
@@ -435,8 +436,12 @@ class Quantity:
     
     def __repr__(self) -> str:
         # Local imports avoid cyclic imports; modules are cached after the first time.
-        from quantium.core.utils import preferred_symbol_for_dim, prettify_unit_name_supers
+        from quantium.core.utils import (
+            preferred_symbol_for_dim,
+            prettify_unit_name_supers,
+        )
         from quantium.units.registry import PREFIXES
+        from math import log10, floor  # Added import for math functions
 
         # Numeric magnitude in the *current* unit
         mag = self._mag_si / self.unit.scale_to_si
@@ -446,30 +451,69 @@ class Quantity:
             return f"{mag:.15g}"
 
         # Start from the user’s unit name (keeps cm/ms etc.), with superscripts & cancellation
+        # This is CRITICAL: it cancels "kg·mg/kg" to "mg" *before* we check composition.
         pretty = prettify_unit_name_supers(self.unit.name, cancel=True)
 
-        # Only consider upgrading when the current unit *looks composed*.
-        # We do NOT override atomic SI symbols like Pa, Hz, Bq, Gy, Sv, ...
-        is_composed = any(ch in pretty for ch in ('/', '·', '^'))
+        # CRITICAL: Check if the *prettified* name is composed.
+        # This check prevents re-formatting of simple units like "cm", "mg", "Pa", "Bq",
+        # which fixes regressions.
+        is_composed = any(ch in pretty for ch in ("/", "·", "^"))
 
         if is_composed:
-            sym = preferred_symbol_for_dim(self.dim)  # e.g., "N", "A", "W", "Pa", "Hz", ...
+            sym = preferred_symbol_for_dim(self.dim)  # e.g., "N", "A", "W", "Pa", ...
             if sym:
-                scale = self.unit.scale_to_si
-
-                # Exact SI scale -> upgrade to the canonical symbol (e.g., "N")
-                if abs(scale - 1.0) <= 1e-12:
-                    pretty = sym
+                # --- FIX: Check for zero *before* any scale/prefix logic ---
+                if self._mag_si == 0.0:
+                    mag = 0.0
+                    pretty = sym  # Show '0 N', '0 Pa', etc.
                 else:
-                    # If the composed unit's total scale matches an SI prefix,
-                    # print as <prefix><symbol> (e.g., 1e-6 -> "µN")
-                    for p in PREFIXES:
-                        if abs(scale - p.factor) <= 1e-12:
-                            pretty = f"{p.symbol}{sym}"
-                            break
-                    # else: keep the composed pretty name as-is
+                    # --- All other logic is now nested in this 'else' ---
+                    scale = self.unit.scale_to_si
+
+                    # 1. Check for exact SI scale (e.g., N/m²)
+                    if abs(scale - 1.0) <= 1e-12:
+                        pretty = sym
+                        mag = self._mag_si  # Use base SI magnitude
+                    else:
+                        # 2. Check for an exact SI prefix match (e.g., kg·m/ms²)
+                        found_prefix = False
+                        for p in PREFIXES:
+                            if abs(scale - p.factor) <= 1e-12:
+                                pretty = f"{p.symbol}{sym}"
+                                mag = self._mag_si / p.factor  # Use rescaled magnitude
+                                found_prefix = True
+                                break
+
+                        # 3. NEW LOGIC: If no exact match, *now* use engineering notation
+                        #    This handles the N/cm² case (scale 10^4).
+                        if not found_prefix:
+                            mag_si = self._mag_si
+                            
+                            # Find the exponent in base 10
+                            exponent = log10(abs(mag_si))
+                            # Find the nearest SI prefix exponent (multiple of 3)
+                            prefix_exp = int(floor(exponent / 3) * 3)
+
+                            prefix_symbol = ""
+                            prefix_factor = 1.0
+
+                            if prefix_exp == 0:
+                                prefix_factor = 1.0
+                                prefix_symbol = ""
+                            else:
+                                for p in PREFIXES:
+                                    if abs(p.factor - (10**prefix_exp)) <= 1e-12:
+                                        prefix_symbol = p.symbol
+                                        prefix_factor = p.factor
+                                        break
+                            
+                            # Calculate the new magnitude
+                            mag = mag_si / prefix_factor
+                            # Create the new pretty name
+                            pretty = f"{prefix_symbol}{sym}"
 
         # If the pretty name reduces to "1", show just the number
+        # This also handles all non-composed units that skipped the `if` block.
         return f"{mag:.15g}" if pretty == "1" else f"{mag:.15g} {pretty}"
 
 
