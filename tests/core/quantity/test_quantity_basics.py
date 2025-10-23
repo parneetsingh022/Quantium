@@ -284,3 +284,9 @@ def test_quantity_value_property():
     
     # 8. Sanity check against your 'shown' helper
     assert math.isclose(q_accel_cm.value, shown(q_accel_cm))
+
+    # 9. Test (int + Dimension)
+    # This fails because int.__add__ fails, and Dimension.__radd__
+    # correctly returns NotImplemented.
+    with pytest.raises(TypeError, match="unsupported operand type"):
+        _ = 1 + LENGTH
