@@ -1,12 +1,15 @@
-from dataclasses import FrozenInstanceError
+from math import isclose
 import pytest
 
-from quantium.core.dimensions import LENGTH
+from quantium.core.dimensions import LENGTH, MASS
 from quantium.core.quantity import Unit
+from quantium.units.registry import DEFAULT_REGISTRY as ureg
+import quantium.core.utils as utils
 
 
 
 from tests.utils import _nop_prettifier
+from quantium.core import utils
 
 # -------------------------------
 # __repr__: pretty printing
@@ -371,3 +374,123 @@ def test_dimensionless_prints_number(monkeypatch):
     q = (1 * m) / (1 * m)
     # repr should be just the number; tolerate "1" exactly
     assert f"{q}" == "1"
+
+
+# -------------------------------
+# __repr__: Regression tests for cancellation + upgrade logic (Issue #72)
+# (These tests use the *real* prettifier)
+# -------------------------------
+
+@pytest.mark.regression(reason="Issue #72: Quantity.__repr__ incorrectly upgrades a cancelled unit to a prefixed SI unit (e.g., mg becomes µkg)")
+def test_issue72_repr_bug_fix_kg_mg_per_kg(monkeypatch):
+    """
+    REGRESSION TEST for the "µkg" bug.
+    Ensures that a unit like "kg·mg/kg" simplifies to "mg" *first*,
+    and then __repr__ does NOT upgrade "mg" to "µkg".
+    """
+    # Invalidate cache to be safe
+    utils.invalidate_preferred_cache()
+    
+    kg = ureg.get("kg")
+    mg = ureg.get("mg")
+    
+    # This is the exact calculation from the bug report
+    dose_rate = 15 * (mg / kg)
+    patient_mass = 75 * kg
+    
+    required_dose = patient_mass * dose_rate
+    
+    # 1. Check the unit name and scale *after* multiplication
+    # The raw name is 'kg·mg/kg'
+    assert required_dose.unit.name == "kg·mg/kg" 
+    # The scale is 1 (for kg) * 1e-6 (for mg/kg) = 1e-6
+    assert isclose(required_dose.unit.scale_to_si, 1e-6)
+    assert required_dose.dim == MASS
+    
+    # 2. Check the __repr__
+    # The prettifier should cancel 'kg·mg/kg' to 'mg'.
+    # The __repr__ logic should see 'mg', see it's *not* composed,
+    # and print it as-is.
+    # It must NOT see 'kg·mg/kg', see it *is* composed,
+    # and upgrade its 1e-6 scale to 'µkg'.
+    assert f"{required_dose}" == "1125 mg"
+    
+    # 3. Check the reverse order
+    required_dose_rev = dose_rate * patient_mass
+    # The raw name is 'mg/kg·kg'
+    assert required_dose_rev.unit.name == "mg/kg·kg"
+    assert isclose(required_dose_rev.unit.scale_to_si, 1e-6)
+    assert f"{required_dose_rev}" == "1125 mg"
+
+@pytest.mark.regression(reason="Issue #72: Quantity.__repr__ incorrectly upgrades a cancelled unit to a prefixed SI unit (e.g., mg becomes µkg)")
+def test_issue72_repr_cancellation_to_prefixed_si(monkeypatch):
+    """
+    Tests that cancellation still allows a *correct* upgrade when
+    the *simplified* unit is still composed.
+    'm·mg/kg' -> 'm·(1e-6 kg) / kg' -> 1e-6 m -> 'µm'
+    """
+    utils.invalidate_preferred_cache()
+
+    m = ureg.get("m")
+    mg = ureg.get("mg")
+    kg = ureg.get("kg")
+    
+    q = (1 * m) * (1 * mg) / (1 * kg) # 1 * (m·mg/kg)
+    
+    # 1. Check unit properties
+    assert isclose(q.unit.scale_to_si, 1e-6) # m * (mg/kg) = 1 * 1e-6
+    assert q.dim == LENGTH # Dimension is Length
+    
+    # 2. Check __repr__
+    # prettify simplifies 'm·mg/kg' to 'm·mg/kg' (it's already simplified)
+    # __repr__ logic:
+    #   pretty = "m·mg/kg"
+    #   is_composed = True
+    #   dim is Length, preferred = "m"
+    #   scale_to_si is 1e-6
+    #   Logic finds prefix 'µ'.
+    #   Logic *correctly* upgrades to "µm".
+    assert f"{q}" == "1 µm"
+
+@pytest.mark.regression(reason="Issue #72: Quantity.__repr__ incorrectly upgrades a cancelled unit to a prefixed SI unit (e.g., mg becomes µkg)")
+def test_issue72_repr_cancellation_to_dimensionless(monkeypatch):
+    """
+    Tests that 'mg/kg' simplifies to a dimensionless number.
+    The prettifier returns "1", and __repr__ should only print the number.
+    """
+    utils.invalidate_preferred_cache()
+    
+    mg = ureg.get("mg")
+    kg = ureg.get("kg")
+    
+    q = (1 * mg) / (1 * kg) # 1 * (mg/kg)
+    
+    # Value is 1e-6 kg / 1 kg = 1e-6
+    assert isclose(q.value, 1e-6)
+    # __repr__ should just be the number
+    assert f"{q}" == "1e-06"
+    
+    # Test with equal values
+    q_equal = (10 * mg) / (10 * mg)
+    assert isclose(q_equal.value, 1)
+    assert f"{q_equal}" == "1"
+
+@pytest.mark.regression(reason="Issue #72: Quantity.__repr__ incorrectly upgrades a cancelled unit to a prefixed SI unit (e.g., mg becomes µkg)")
+def test_issue72_repr_cancellation_to_si_symbol(monkeypatch):
+    """
+    Tests that 'mJ/ms' simplifies to 'W'.
+    This confirms the existing behavior still works with the *real* prettifier.
+    """
+    utils.invalidate_preferred_cache()
+    
+    mJ = ureg.get("mJ")
+    ms = ureg.get("ms")
+    
+    q_W = (1 * mJ) / (1 * ms) # (1e-3 J) / (1e-3 s) = 1 J/s = 1 W
+    
+    # Prettify returns 'mJ/ms'
+    # __repr__ sees 'mJ/ms', is_composed = True
+    # dim is Power, preferred = 'W'
+    # scale_to_si is 1.0
+    # Logic upgrades to 'W'
+    assert f"{q_W}" == "1 W"

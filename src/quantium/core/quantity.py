@@ -450,8 +450,7 @@ class Quantity:
 
         # Only consider upgrading when the current unit *looks composed*.
         # We do NOT override atomic SI symbols like Pa, Hz, Bq, Gy, Sv, ...
-        name_raw = self.unit.name  # use original to detect composition
-        is_composed = any(ch in name_raw for ch in ('/', '·', '^'))
+        is_composed = any(ch in pretty for ch in ('/', '·', '^'))
 
         if is_composed:
             sym = preferred_symbol_for_dim(self.dim)  # e.g., "N", "A", "W", "Pa", "Hz", ...
