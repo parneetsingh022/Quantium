@@ -441,6 +441,7 @@ class Quantity:
             prettify_unit_name_supers,
         )
         from quantium.units.registry import PREFIXES
+        from math import log10, floor  # Added import for math functions
 
         # Numeric magnitude in the *current* unit
         mag = self._mag_si / self.unit.scale_to_si
@@ -455,40 +456,43 @@ class Quantity:
 
         # CRITICAL: Check if the *prettified* name is composed.
         # This check prevents re-formatting of simple units like "cm", "mg", "Pa", "Bq",
-        # which fixes all 7 failing tests.
+        # which fixes regressions.
         is_composed = any(ch in pretty for ch in ("/", "·", "^"))
 
         if is_composed:
             sym = preferred_symbol_for_dim(self.dim)  # e.g., "N", "A", "W", "Pa", ...
             if sym:
-                scale = self.unit.scale_to_si
-
-                # 1. Check for exact SI scale (e.g., N/m²)
-                if abs(scale - 1.0) <= 1e-12:
-                    pretty = sym
-                    mag = self._mag_si  # Use base SI magnitude
+                # --- FIX: Check for zero *before* any scale/prefix logic ---
+                if self._mag_si == 0.0:
+                    mag = 0.0
+                    pretty = sym  # Show '0 N', '0 Pa', etc.
                 else:
-                    # 2. Check for an exact SI prefix match (e.g., kg·m/ms²)
-                    found_prefix = False
-                    for p in PREFIXES:
-                        if abs(scale - p.factor) <= 1e-12:
-                            pretty = f"{p.symbol}{sym}"
-                            mag = self._mag_si / p.factor  # Use rescaled magnitude
-                            found_prefix = True
-                            break
+                    # --- All other logic is now nested in this 'else' ---
+                    scale = self.unit.scale_to_si
 
-                    # 3. NEW LOGIC: If no exact match, *now* use engineering notation
-                    #    This handles the N/cm² case (scale 10^4).
-                    if not found_prefix:
-                        mag_si = self._mag_si
-                        if mag_si == 0.0:
-                            mag = 0.0
-                            pretty = sym  # Show '0 Pa'
-                        else:
+                    # 1. Check for exact SI scale (e.g., N/m²)
+                    if abs(scale - 1.0) <= 1e-12:
+                        pretty = sym
+                        mag = self._mag_si  # Use base SI magnitude
+                    else:
+                        # 2. Check for an exact SI prefix match (e.g., kg·m/ms²)
+                        found_prefix = False
+                        for p in PREFIXES:
+                            if abs(scale - p.factor) <= 1e-12:
+                                pretty = f"{p.symbol}{sym}"
+                                mag = self._mag_si / p.factor  # Use rescaled magnitude
+                                found_prefix = True
+                                break
+
+                        # 3. NEW LOGIC: If no exact match, *now* use engineering notation
+                        #    This handles the N/cm² case (scale 10^4).
+                        if not found_prefix:
+                            mag_si = self._mag_si
+                            
                             # Find the exponent in base 10
-                            exponent = math.log10(abs(mag_si))
+                            exponent = log10(abs(mag_si))
                             # Find the nearest SI prefix exponent (multiple of 3)
-                            prefix_exp = int(math.floor(exponent / 3) * 3)
+                            prefix_exp = int(floor(exponent / 3) * 3)
 
                             prefix_symbol = ""
                             prefix_factor = 1.0
