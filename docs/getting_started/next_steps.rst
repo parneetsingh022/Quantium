@@ -8,7 +8,6 @@ By now, you’ve seen how Quantium:
 - Converts and simplifies units seamlessly.
 - Supports both attribute-style and string-based unit definitions.
 - Works in a variety of real-world scenarios, from physics to medicine.
-- Can be extended with custom units and used with libraries like NumPy.
 
 From here, you can explore:
 

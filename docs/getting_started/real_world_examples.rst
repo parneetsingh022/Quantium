@@ -119,53 +119,55 @@ Quantium prevents a user from, for example, accidentally multiplying by a mass i
 5. Mechanical Engineering: Pressure
 --------------------------------------
 
-Calculating pressure ($P = F/A$) involves multiple derived units. Let's find the pressure exerted by a 100 Newton force on a 25 cm² area.
+Calculating pressure involves multiple derived units. Let's find the pressure exerted by a 100 Newton force on a 25 cm² area.
+
+.. math::
+
+    P = \frac{F}{A}
 
 .. code-block:: python
 
     from quantium import u
 
     force = 100 * u.N
-    area = 25 * u.cm**2
+    area = 25 * u.m**2
 
-    # Quantium handles the conversion from cm² to m² automatically
     pressure = force / area
     print(pressure)
 
     # Convert the result to other common pressure units
     print(pressure.to(u.kPa))
-    print(pressure.to(u.psi))
+.. print(pressure.to(u.psi))
 
 Output:
 
 .. code-block::
 
-    40000.0 Pa
-    40.0 kPa
-    5.8015 psi
+    4 Pa
+    0.004 kPa
 
---------------------------------------
-6. Everyday Life: Fuel Efficiency
---------------------------------------
+.. --------------------------------------
+.. 6. Everyday Life: Fuel Efficiency
+.. --------------------------------------
 
-You can easily convert between different cultural conventions, such as fuel efficiency.
+.. You can easily convert between different cultural conventions, such as fuel efficiency.
 
-.. code-block:: python
+.. .. code-block:: python
 
-    from quantium import u
+..     from quantium import u
 
-    # Define a US gallon
-    u.define("gallon", 3.78541, u.L)
+..     # Define a US gallon
+..     u.define("gallon", 3.78541, u.L)
 
-    efficiency_mpg = 35 * u.mile / u.gallon
+..     efficiency_mpg = 35 * u.mile / u.gallon
 
-    # Convert to the international standard (Liters per 100km)
-    # Note: L/100km is an inverse unit, so we take the reciprocal
-    efficiency_L_per_100km = (100 * u.km) / efficiency_mpg
-    print(efficiency_L_per_100km.to(u.L))
+..     # Convert to the international standard (Liters per 100km)
+..     # Note: L/100km is an inverse unit, so we take the reciprocal
+..     efficiency_L_per_100km = (100 * u.km) / efficiency_mpg
+..     print(efficiency_L_per_100km.to(u.L))
 
-Output:
+.. Output:
 
-.. code-block::
+.. .. code-block::
 
-    6.72 L
+..     6.72 L
