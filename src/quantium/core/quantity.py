@@ -559,7 +559,7 @@ class Quantity:
             If the format specifier is not one of "", "unit", "u", or "si".
         """
         spec = (spec or "").strip().lower()
-        if spec in ("", "unit", "u"):
+        if spec in ("", "native"):
             return repr(self)          # current unit (default)
         if spec == "si":
             return repr(self.to_si())  # force SI
