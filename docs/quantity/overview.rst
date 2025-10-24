@@ -14,7 +14,8 @@ calls the ``Quantity`` constructor and returns the resulting object.
 
 .. code-block:: python
 
-   from quantium import u, Quantity
+   from quantium.core.quantity import Quantity
+   from quantium import u
 
    # Preferred shorthand (returns a Quantity)
    dist_short = 100 * u.m

@@ -27,7 +27,7 @@ Quantium provides a default registry of predefined units. This is accessed throu
 
    # 2. Access compound units using string parsing
    speed_unit = u("m/s")
-   acceleration = 9.8 * u("m/s^2")
+   acceleration = 9.8 * u("m/s**2")
    pressure = 101.3 * u("kPa")
 
 Adding New Units

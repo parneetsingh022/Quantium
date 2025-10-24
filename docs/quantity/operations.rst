@@ -28,7 +28,7 @@ Combining quantities produces new dimensions and units (e.g., Length / Time = Sp
    print(speed)  # 10 m/s
 
    force = (10 * u.kg) * (9.8 * u.m / u.s**2)
-   print(force)  # 98 kg·m/s² (which simplifies to 98 N)
+   print(force)  # 98 N
 
 Exponentiation
 --------------
