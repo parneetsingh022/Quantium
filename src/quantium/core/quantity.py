@@ -389,7 +389,13 @@ class Quantity:
         if isinstance(other, Unit):
             new_unit = self.unit * other
 
-            return Quantity(self._mag_si, new_unit)
+            if new_unit.dim == DIM_0:
+                # Result is dimensionless. Calculate the new SI mag and use a scale=1 unit.
+                new_mag_si = self._mag_si * other.scale_to_si
+                unit_dimless = Unit('', 1.0, DIM_0)
+                return Quantity(new_mag_si, unit_dimless) # Pass SI mag as value
+
+            return Quantity(self.value, new_unit)
         
         # quantity × quantity
         new_unit = self.unit * other.unit
@@ -408,8 +414,13 @@ class Quantity:
         # quantity / unit
         if isinstance(other, Unit):
             new_unit = self.unit / other
-
-            return Quantity(self._mag_si, new_unit)
+            if new_unit.dim == DIM_0:
+                # Result is dimensionless. Calculate the new SI mag and use a scale=1 unit.
+                new_mag_si = self._mag_si / other.scale_to_si
+                unit_dimless = Unit('', 1.0, DIM_0)
+                return Quantity(new_mag_si, unit_dimless) # Pass SI mag as value
+            
+            return Quantity(self.value, new_unit)
 
         # quantity / quantity
         new_unit = self.unit / other.unit
