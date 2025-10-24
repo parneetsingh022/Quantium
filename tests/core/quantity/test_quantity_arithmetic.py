@@ -248,8 +248,8 @@ def test_quantity_times_unit_resulting_in_dimensionless():
     Tests the `if new_unit.dim == DIM_0:` branch in Quantity.__mul__.
     Ensures the SI magnitude is calculated correctly and a scale=1 unit is used.
     """
-    m = ureg.get("m")
-    cm = ureg.get("cm")
+    m = u.m
+    cm = u.cm
 
     # 1. Simple case: (10 m) * (1/m)
     q1 = 10 * m
@@ -283,3 +283,25 @@ def test_quantity_times_unit_resulting_in_dimensionless():
     assert q_final_3.unit.scale_to_si == 1.0
     assert math.isclose(q_final_3._mag_si, 0.1)  # 0.1 * 1.0
     assert math.isclose(q_final_3.value, 0.1)
+
+
+@pytest.mark.regression(reason="Bugfix: Cover Quantity * Unit dimensionless path")
+def test_quantity_times_inverse_unit_simple():
+    """
+    Explicitly tests the `if new_unit.dim == DIM_0:` branch in Quantity.__mul__
+    with a single simple case to satisfy code coverage.
+    """
+    m = u("m")
+    q = 5 * m       # _mag_si = 5.0
+    inv_m = 1 / m   # scale_to_si = 1.0
+
+    # This calls q.__mul__(inv_m)
+    result = q * inv_m
+    
+    # Test the exact lines from the coverage report
+    # new_mag_si = self._mag_si * other.scale_to_si (5.0 * 1.0)
+    # return Quantity(new_mag_si, unit_dimless)
+    assert result.dim == DIM_0
+    assert result.unit.scale_to_si == 1.0
+    assert math.isclose(result._mag_si, 5.0)
+    assert math.isclose(result.value, 5.0)
