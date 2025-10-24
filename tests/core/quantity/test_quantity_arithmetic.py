@@ -240,3 +240,46 @@ def test_regression_67_quantity_div_unit_uses_value():
     assert q2.unit.name == "cm/s"
     assert math.isclose(q2._mag_si, 10.0)
     assert math.isclose(q2.value, 1000.0)
+
+
+@pytest.mark.regression(reason="Bugfix: Quantity * Unit dimensionless path")
+def test_quantity_times_unit_resulting_in_dimensionless():
+    """
+    Tests the `if new_unit.dim == DIM_0:` branch in Quantity.__mul__.
+    Ensures the SI magnitude is calculated correctly and a scale=1 unit is used.
+    """
+    m = ureg.get("m")
+    cm = ureg.get("cm")
+
+    # 1. Simple case: (10 m) * (1/m)
+    q1 = 10 * m
+    inv_m = 1 / m  # scale_to_si = 1.0
+
+    q_final_1 = q1 * inv_m
+
+    assert q_final_1.dim == DIM_0
+    assert q_final_1.unit.scale_to_si == 1.0
+    assert math.isclose(q_final_1._mag_si, 10.0)  # 10.0 * 1.0
+    assert math.isclose(q_final_1.value, 10.0)
+
+    # 2. Prefixed case: (10 m) * (1/cm)
+    q2 = 10 * m  # _mag_si = 10.0
+    inv_cm = 1 / cm  # scale_to_si = 1 / 0.01 = 100.0
+
+    q_final_2 = q2 * inv_cm  # 10 m * (1 / 0.01 m) = 1000
+
+    assert q_final_2.dim == DIM_0
+    assert q_final_2.unit.scale_to_si == 1.0
+    assert math.isclose(q_final_2._mag_si, 1000.0)  # 10.0 * 100.0
+    assert math.isclose(q_final_2.value, 1000.0)
+
+    # 3. Prefixed case (other way): (10 cm) * (1/m)
+    q3 = 10 * cm  # _mag_si = 0.1
+    # inv_m is from case 1 (scale_to_si = 1.0)
+
+    q_final_3 = q3 * inv_m  # 10 cm * (1/m) = 0.1 m * (1/m) = 0.1
+
+    assert q_final_3.dim == DIM_0
+    assert q_final_3.unit.scale_to_si == 1.0
+    assert math.isclose(q_final_3._mag_si, 0.1)  # 0.1 * 1.0
+    assert math.isclose(q_final_3.value, 0.1)
