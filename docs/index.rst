@@ -16,8 +16,8 @@ Installation & Setup
 
 .. raw:: html
 
-      <div class="intro-container">
-      <img src="_static/quantium_logo.png" alt="Quantium Logo">
+   <div class="intro-container" style="background-color: #0669b4ff;">
+      <!-- <img src="_static/quantium_logo.png" alt="Quantium Logo"> -->
       <div>
          <div>
          <p><strong>Welcome to Quantium</strong> —  a lightweight Python library for unit-safe scientific and mathematical computation. It combines a clean, dependency-minimal architecture with a powerful system for dimensional analysis — ensuring that every calculation you perform respects physical consistency.</p>
