@@ -7,15 +7,23 @@ syntax is used throughout for readability.
 Addition / Subtraction
 ----------------------
 
-Quantities must have the same physical dimension (e.g., Length). The result is
-returned in the units of the left-hand operand.
+Quantities must have the same physical dimension (e.g., both represent length, time, energy, etc.).
+When two compatible quantities are added or subtracted, the result keeps the units of the left-hand operand (the first quantity in the expression).
 
 .. code-block:: python
 
    from quantium import u
 
    total_dist = (1 * u.km) + (500 * u.m)
-   print(total_dist)  # 1500 m
+   print(total_dist)  # 1.5 m
+
+   delta_t = (10 * u.min) - (30 * u.s)
+   print(delta_t) # 9.5 min
+
+.. note::
+
+    This ensures intuitive and stable behavior — the left-hand operand determines the display unit,
+    while the underlying computation is always performed in SI base units for numerical accuracy.
 
 Multiplication / Division
 -------------------------
