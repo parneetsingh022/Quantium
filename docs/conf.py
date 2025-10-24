@@ -37,6 +37,10 @@ html_theme_options = {
     # Handy keyboard nav (j/k) through the sidebar
     "navigation_with_keys": True,
 
+    'navigation_depth': -1,
+
+    "show_toc_level": 2,
+
     "collapse_navigation": False,  # Prevent collapsing of navigation
 }
 

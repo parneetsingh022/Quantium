@@ -13,6 +13,8 @@ Installation & Setup
 
    Installation & Setup <self>
    Getting Started <getting_started/index>
+   units/index
+   quantity/index
 
 .. raw:: html
 
