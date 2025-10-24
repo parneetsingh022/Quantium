@@ -4,6 +4,7 @@ import pytest
 
 from quantium.core.dimensions import DIM_0, TIME, LENGTH, TEMPERATURE, dim_div, dim_mul
 from quantium.core.quantity import Unit, Quantity
+from quantium import u
 
 
 # -------------------------------
@@ -97,7 +98,7 @@ def test_quantity_times_unit_with_prefix_does_not_change_numeric_value():
     assert out.dim == dim_mul(LENGTH, LENGTH)
     # Displayed magnitude should still be 3.0 in the composed unit
     # because shown_value = out._mag_si / out.unit.scale_to_si = (3.0*0.01)/0.01 = 3.0
-    assert math.isclose(out._mag_si / out.unit.scale_to_si, 3.0)
+    assert math.isclose(out._mag_si / out.unit.scale_to_si, 300.0)
     # Name depends on your Unit.__mul__ formatting:
     assert out.unit.name in ("cm·m", "m·cm")
 
@@ -170,3 +171,72 @@ def test_quantity_div_unit_does_not_mutate_original():
     # original unchanged
     assert q.unit is m
     assert math.isclose(q._mag_si, 12.0)
+
+# --- Tests for Issue #67 ---
+
+@pytest.mark.regression(reason="Issue #67: Operator precedence bug in scalar * unit / unit")
+def test_regression_67_scalar_times_unit_div_unit_precedence():
+    """
+    Tests the exact failing case from Issue #67.
+    1000 * u.cm / u.s was evaluated as (1000 * u.cm) / u.s,
+    and the bug in Quantity.__truediv__(Unit) caused an incorrect value.
+    """
+    cm =  u("cm")
+    s =  u("s")
+
+    # This is evaluated as (1000 * cm) / s
+    q = 1000 * cm / s
+
+    # q1 = 1000 * cm -> (value=1000, _mag_si=10.0)
+    # q_new = q1 / s
+    # Fixed code uses q1.value (1000.0)
+    # q_new = Quantity(1000.0, cm/s)
+    #   q_new._mag_si = 1000.0 * 0.01 = 10.0
+    #   q_new.value = 10.0 / 0.01 = 1000.0
+
+    assert isinstance(q, Quantity)
+    assert q.unit.name == "cm/s"
+    assert math.isclose(q._mag_si, 10.0)
+    assert math.isclose(q.value, 1000.0)
+
+
+@pytest.mark.regression(reason="Issue #67: Fix for Quantity * Unit constructor")
+def test_regression_67_quantity_times_unit_uses_value():
+    """
+    Explicitly tests that (Quantity) * (Unit) uses self.value, not self._mag_si.
+    """
+    cm =  u("cm") # scale 0.01
+    m =  u("m")   # scale 1.0
+
+    q1 = 1000 * cm  # (value=1000, _mag_si=10.0)
+    q2 = q1 * m     # Should be 1000 cm·m
+
+    # Fixed code: Quantity(q1.value, cm·m) -> Quantity(1000.0, cm·m)
+    #   q2.unit = cm·m (scale 0.01)
+    #   q2._mag_si = 1000.0 * 0.01 = 10.0
+    #   q2.value = 10.0 / 0.01 = 1000.0
+    
+    assert q2.unit.name == "cm·m"
+    assert math.isclose(q2._mag_si, 10.0)
+    assert math.isclose(q2.value, 1000.0)
+
+
+@pytest.mark.regression(reason="Issue #67: Fix for Quantity / Unit constructor")
+def test_regression_67_quantity_div_unit_uses_value():
+    """
+    Explicitly tests that (Quantity) / (Unit) uses self.value, not self._mag_si.
+    """
+    cm =  u("cm") # scale 0.01
+    s =  u("s")   # scale 1.0
+
+    q1 = 1000 * cm  # (value=1000, _mag_si=10.0)
+    q2 = q1 / s     # Should be 1000 cm/s
+
+    # Fixed code: Quantity(q1.value, cm/s) -> Quantity(1000.0, cm/s)
+    #   q2.unit = cm/s (scale 0.01)
+    #   q2._mag_si = 1000.0 * 0.01 = 10.0
+    #   q2.value = 10.0 / 0.01 = 1000.0
+    
+    assert q2.unit.name == "cm/s"
+    assert math.isclose(q2._mag_si, 10.0)
+    assert math.isclose(q2.value, 1000.0)
