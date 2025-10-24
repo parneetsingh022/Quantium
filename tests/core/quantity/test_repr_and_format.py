@@ -65,23 +65,22 @@ def test_format_equivalents_across_units(monkeypatch):
     # 1) Velocity in non-SI (cm/s)
     v = 250 * (cm / s)
     assert f"{v}" == "250 cm/s"
-    assert f"{v:unit}" == "250 cm/s"
-    assert f"{v:u}" == "250 cm/s"
+    assert f"{v:native}" == "250 cm/s"
 
     # 2) Pressure with prefix (kPa)
     p = 2 * kPa
     assert f"{p}" == "2 kPa"
-    assert f"{p:unit}" == "2 kPa"
+    assert f"{p:native}" == "2 kPa"
 
     # 3) Alias normalization (ohm → Ω)
     r = 5 * ohm
     assert f"{r}" == "5 Ω"
-    assert f"{r:unit}" == "5 Ω"
+    assert f"{r:native}" == "5 Ω"
 
     # 4) Mixed time unit in denominator (m/min)
     speed = 120 * (ureg.get("m") / min_)
     assert f"{speed}" == "120 m/min"
-    assert f"{speed:unit}" == "120 m/min"
+    assert f"{speed:native}" == "120 m/min"
 
 
 def test_format_si_converts_various_units(monkeypatch):
@@ -148,7 +147,7 @@ def test_format_dimensionless_is_numeric_only(monkeypatch):
 
     q = (3 * kPa) / (3000 * Pa)  # equals 1 (dimensionless)
     assert f"{q}" == "1"
-    assert f"{q:unit}" == "1"
+    assert f"{q:native}" == "1"
     assert f"{q:si}" == "1"
 
 

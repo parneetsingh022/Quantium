@@ -13,7 +13,7 @@ implementation. By default quantities print in their current unit. Use the
 
    # Default format (current unit)
    print(f"{v}")      # 1000 cm/s
-   print(f"{v:unit}") # 1000 cm/s
+   print(f"{v:native}") # 1000 cm/s
 
    # Force SI format
    print(f"{v:si}")   # 10 m/s
