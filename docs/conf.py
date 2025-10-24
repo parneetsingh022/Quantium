@@ -31,13 +31,9 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 html_theme = "sphinx_book_theme"
 
-html_logo = "_static/quantium_logo.png"
+html_logo = "_static/quantium_logo_light2.png"
 
 html_theme_options = {
-    "logo": {
-        "image_light": "_static/quantium_logo.png",
-        "image_dark": "_static/quantium_logo_dark.png",
-    },
     # Handy keyboard nav (j/k) through the sidebar
     "navigation_with_keys": True,
 
