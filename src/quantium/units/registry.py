@@ -328,7 +328,7 @@ class UnitNamespace:
             aliases = set()
         return sorted(base_dir | units | aliases)
 
-UnitNamespace._reserved_names = set(dir(UnitNamespace))  # type: ignore # type: set[str]
+UnitNamespace._reserved_names = set(dir(UnitNamespace))  # pyright: ignore[reportInvalidTypeForm] # type: set[str]
 
 
 
