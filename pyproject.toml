@@ -27,6 +27,20 @@ dependencies = [
   # "numpy>=1.26",
 ]
 
+classifiers = [
+    # Specify the license
+    "License :: OSI Approved :: MIT License",
+    
+    # OS
+    "Operating System :: OS Independent",
+    
+    # Specify Python versions
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
