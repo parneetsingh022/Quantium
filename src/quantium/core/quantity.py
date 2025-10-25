@@ -556,7 +556,7 @@ class Quantity:
         Raises
         ------
         ValueError
-            If the format specifier is not one of "", "native", "u", or "si".
+            If the format specifier is not one of "", "native", or "si".
         """
         spec = (spec or "").strip().lower()
         if spec in ("", "native"):
