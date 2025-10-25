@@ -33,6 +33,9 @@
   <a href="https://codecov.io/gh/parneetsingh022/quantium">
   <img src="https://codecov.io/gh/parneetsingh022/quantium/graph/badge.svg" alt="Test Coverage">
   </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT">
+  </a>
 </p>
 
 ### Readable units. Reliable math.
