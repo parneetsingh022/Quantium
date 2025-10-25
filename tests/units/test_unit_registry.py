@@ -842,3 +842,49 @@ def test_register_alias_conflict_with_normalized_unit_name_raises(reg):
     # conflicts and correctly raises the error.
     with pytest.raises(ValueError, match="a unit with the name 'µA' already exists"):
         reg.register_alias(conflicting_alias, "s")
+
+
+# ---------------------------------------------------------------------------
+# Reserved-name rejection for register() and register_alias()
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", ["define", "__init__", "_reserved_names"])
+def test_register_rejects_reserved_unit_names(reg, name):
+    ref = reg.get("m")
+    with pytest.raises(ValueError, match="UnitNamespace attribute/method"):
+        reg.register(Unit(name, 1.0, ref.dim))
+
+@pytest.mark.parametrize("name", ["define", "__init__", "_reserved_names"])
+def test_register_rejects_reserved_unit_names_even_with_replace(reg, name):
+    ref = reg.get("m")
+    with pytest.raises(ValueError, match="UnitNamespace attribute/method"):
+        reg.register(Unit(name, 1.0, ref.dim), replace=True)
+
+@pytest.mark.parametrize("alias", [
+    # literal/public
+    "define",
+    # dunder
+    "__init__",
+    # public attribute we add post-class
+    "_reserved_names",
+    # case variants to ensure casefold path is checked
+    "DeFiNe",
+    "__INIT__",
+])
+def test_register_alias_rejects_reserved_names(reg, alias):
+    with pytest.raises(ValueError, match="UnitNamespace attribute/method"):
+        reg.register_alias(alias, "m")
+
+@pytest.mark.parametrize("alias", ["define", "__init__", "_reserved_names"])
+def test_register_alias_rejects_reserved_names_even_with_replace(reg, alias):
+    with pytest.raises(ValueError, match="UnitNamespace attribute/method"):
+        reg.register_alias(alias, "m", replace=True)
+
+def test_non_reserved_names_still_register_and_alias_ok(reg):
+    # Positive control to show normal behavior still works
+    ref = reg.get("m")
+    reg.register(Unit("myunit", 201.168, ref.dim))
+    assert reg.get("myunit").scale_to_si == pytest.approx(201.168)
+
+    reg.register_alias("munyt", "myunit")
+    assert reg.get("munyt") is reg.get("myunit")

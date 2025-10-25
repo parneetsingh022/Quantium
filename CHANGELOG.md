@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),  
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - **Unreleased**
+
+### Fixed
+- Prevented registration or aliasing of unit names that conflict with existing `UnitNamespace` attributes or methods (e.g., `define`, `__init__`, `_reserved_names`), ensuring consistent and unambiguous behavior when defining units. [#69]
+- Added `_reserved_names` declaration inside `UnitNamespace` and post-class initialization to correctly include it in reserved name checks. [#69]
+- Updated `UnitsRegistry.register()`, `register_alias()`, and `UnitNamespace.define()` to raise clear `ValueError` messages when attempting to register conflicting names. [#69]
+
+[#69]: https://github.com/parneetsingh022/quantium/issues/69
+
 ## [0.1.0] - 2025-10-24
 
 ### Breaking Change
