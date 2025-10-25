@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantium"
-version = "0.1.0"
+version = "0.1.1"
 description = "A modern Python library for dimensional analysis and unit-safe scientific computation."
 readme = "README.md"
 requires-python = ">=3.10"
