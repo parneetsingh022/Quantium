@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 import threading
-from typing import Dict, Iterable, Mapping, Optional, Tuple
+from typing import Dict, Iterable, Mapping, Optional, Tuple, ClassVar
 import unicodedata
 from quantium.units.prefixes import PREFIXES
 
@@ -131,6 +131,11 @@ class UnitsRegistry:
         # The lock must wrap the *entire* check-and-set operation
         # to prevent race conditions.
         with self._lock:
+            if unit.name in getattr(UnitNamespace, "_reserved_names", ()):
+                raise ValueError(
+                    f"Cannot register unit '{unit.name}': "
+                    "name conflicts with UnitNamespace attribute/method."
+                )
             
             # Check for conflicts *only* if replace is False
             if not replace:
@@ -168,6 +173,16 @@ class UnitsRegistry:
         folded_key = literal_key.casefold()
 
         with self._lock:
+            reserved = getattr(UnitNamespace, "_reserved_names", ())
+            if (
+                literal_key in reserved
+                or folded_key in reserved
+                or norm_key in reserved
+            ):
+                raise ValueError(
+                    f"Cannot register alias '{alias}': "
+                    "name conflicts with UnitNamespace attribute/method."
+                )
             # Check for conflicts *only* if replace is False
             if not replace:
                 # Check all potential keys (literal, folded, and normalized)
@@ -270,6 +285,8 @@ class UnitsRegistry:
     
 
 class UnitNamespace:
+    _reserved_names: ClassVar[set[str]] = set()
+
     def __init__(self, reg : "UnitsRegistry") -> None:
         self._reg = reg
 
@@ -277,6 +294,12 @@ class UnitNamespace:
         return self._reg.has(spec)
 
     def define(self, expr : str, scale : "float|int", reference : "Unit", replace : bool = False) -> None:
+        if expr in getattr(UnitNamespace, "_reserved_names", ()):
+            raise ValueError(
+                f"Cannot define unit '{expr}': "
+                "name conflicts with UnitNamespace attribute/method."
+            )
+        
         self._reg.register(Unit(expr, float(scale) * reference.scale_to_si , reference.dim), replace)
 
     def __call__(self, spec : "str") -> "Unit":
@@ -304,7 +327,8 @@ class UnitNamespace:
         except Exception:
             aliases = set()
         return sorted(base_dir | units | aliases)
-    
+
+UnitNamespace._reserved_names = set(dir(UnitNamespace))  # pyright: ignore[reportInvalidTypeForm] # type: set[str]
 
 
 

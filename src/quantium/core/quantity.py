@@ -538,7 +538,7 @@ class Quantity:
 
         Supported specifiers
         --------------------
-        "" (empty), "unit", or "u"
+        "" (empty), or "native"
             Display the quantity in its current unit (default).
         "si"
             Display the quantity converted to SI units.
@@ -548,7 +548,7 @@ class Quantity:
         >>> v = 1000 @ (ureg.get("cm") / ureg.get("s"))
         >>> f"{v}"           # default: show in current unit (cm/s)
         '1000 cm/s'
-        >>> f"{v:unit}"      # explicit but same as above
+        >>> f"{v:native}"      # explicit but same as above
         '1000 cm/s'
         >>> f"{v:si}"        # convert and show in SI (m/s)
         '10 m/s'
@@ -556,14 +556,14 @@ class Quantity:
         Raises
         ------
         ValueError
-            If the format specifier is not one of "", "unit", "u", or "si".
+            If the format specifier is not one of "", "native", or "si".
         """
         spec = (spec or "").strip().lower()
         if spec in ("", "native"):
-            return repr(self)          # current unit (default)
+            return repr(self)          # current native (default)
         if spec == "si":
             return repr(self.to_si())  # force SI
-        raise ValueError("Unknown format spec; use '', 'unit', or 'si'")
+        raise ValueError("Unknown format spec; use '', 'native', or 'si'")
 
 
 

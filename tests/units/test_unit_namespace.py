@@ -6,6 +6,12 @@ import quantium.units.registry as regmod
 from quantium.units.registry import UnitsRegistry, UnitNamespace
 from quantium.core.quantity import Unit  # your Unit class
 from quantium.core.dimensions import dim_div
+from quantium.units.registry import _bootstrap_default_registry
+
+@pytest.fixture
+def u():
+    # fresh namespace per test to avoid global state bleed
+    return _bootstrap_default_registry().as_namespace()
 
 
 def test_import_u_from_quantium(monkeypatch, reg):
@@ -122,7 +128,7 @@ def test_namespace_dir_is_sorted_and_not_empty(ns):
     assert len(names) > 10  # sanity: we expect lots of symbols
 
 # ---------------------------------------------------------------------------
-# (Optional) Top-level convenience 'u' wiring smoke test
+# Top-level convenience 'u' wiring smoke test
 # ---------------------------------------------------------------------------
 
 def test_top_level_u_uses_default_registry(monkeypatch, reg):
@@ -136,3 +142,34 @@ def test_top_level_u_uses_default_registry(monkeypatch, reg):
     from quantium import u
     assert u.m is reg.get("m")
     assert u("cm").dim == reg.get("cm").dim
+
+# ---------------------------------------------------------------------------
+# Validation to ensure the `define` method prevents registration of units
+# whose names conflict with existing UnitNamespace attributes or methods.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", ["define", "__init__", "_reserved_names"])
+def test_define_raises_value_error_when_conflicted_with_namespace_attributes(u, name):
+    # any valid reference unit is fine
+    with pytest.raises(ValueError, match="conflicts with UnitNamespace"):
+        u.define(name, 1.0, u.m)
+
+def test_define_nonconflicting_name_succeeds(u):
+    u.define("test", 201.168, u.m)
+    assert u("test").scale_to_si == pytest.approx(201.168)
+    # attribute access should also resolve if not colliding
+    assert u.test is u("test")
+
+def test_registry_blocks_reserved_name_on_register():
+    reg = _bootstrap_default_registry()
+    u = reg.as_namespace()
+    # Try to register directly via the registry (bypassing UnitNamespace.define)
+    from quantium.core.quantity import Unit
+    with pytest.raises(ValueError, match="UnitNamespace"):
+        reg.register(Unit("define", 1.0, u.m.dim))
+
+def test_registry_blocks_reserved_name_on_alias():
+    reg = _bootstrap_default_registry()
+    # Aliases that collide with UnitNamespace should also fail
+    with pytest.raises(ValueError, match="UnitNamespace"):
+        reg.register_alias("__init__", "m")
