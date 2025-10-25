@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.1] - **Unreleased**
 
+### Added
+- Added Python 3.13 and 3.14 classifiers to `pyproject.toml` for up-to-date Python version metadata. [#86]
+
 ### Fixed
 - Prevented registration or aliasing of unit names that conflict with existing `UnitNamespace` attributes or methods (e.g., `define`, `__init__`, `_reserved_names`), ensuring consistent and unambiguous behavior when defining units. [#69]
 - Added `_reserved_names` declaration inside `UnitNamespace` and post-class initialization to correctly include it in reserved name checks. [#69]
 - Updated `UnitsRegistry.register()`, `register_alias()`, and `UnitNamespace.define()` to raise clear `ValueError` messages when attempting to register conflicting names. [#69]
 
+[#86]: https://github.com/parneetsingh022/quantium/issues/86
 [#69]: https://github.com/parneetsingh022/quantium/issues/69
 
 ## [0.1.0] - 2025-10-24
