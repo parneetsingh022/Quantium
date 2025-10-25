@@ -8,7 +8,7 @@
        height="300">
 </p>
 
-<p align="center">
+<p>
   <a href="https://badge.fury.io/py/quantium">
     <img src="https://badge.fury.io/py/quantium.svg" alt="PyPI version">
   </a>
@@ -35,6 +35,12 @@
   </a>
   <a href="https://opensource.org/licenses/MIT">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT">
+  </a>
+  <a href="https://pepy.tech/project/quantium">
+  <img src="https://static.pepy.tech/personalized-badge/quantium?period=total&units=international_system&left_color=black&right_color=blue&left_text=downloads" alt="PyPI Downloads">
+  </a>
+  <a href="https://github.com/parneetsingh022/quantium/commits/main">
+    <img src="https://img.shields.io/github/last-commit/parneetsingh022/quantium" alt="GitHub last commit">
   </a>
 </p>
 
