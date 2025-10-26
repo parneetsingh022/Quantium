@@ -384,3 +384,12 @@ def preferred_symbol_for_dim(dim: Dim) -> Optional[str]:
 def invalidate_preferred_cache() -> None:
     global _PREFERRED_BY_DIM
     _PREFERRED_BY_DIM = None
+    # Also clear any dependent caches (lazily import to avoid cycles)
+    try:
+        from quantium.core import quantity as _quantity  # LOCAL import
+    except Exception:
+        return
+
+    cache_clear = getattr(_quantity, "_preferred_dim_symbol_map", None)
+    if cache_clear and hasattr(cache_clear, "cache_clear"):
+        cache_clear.cache_clear()

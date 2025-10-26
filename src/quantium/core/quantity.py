@@ -23,6 +23,7 @@ The system supports:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from math import isclose, isfinite
 import math
 import re
@@ -51,6 +52,72 @@ def _normalize_power_name(name: str) -> str:
     if exp == 0:
         return "1"
     return f"{base}^{exp}"
+
+
+_MAX_CANON_POWER = 12
+
+
+def _dim_key(dim: Dim) -> tuple[int, ...]:
+    """Return a hashable key for cached dimension lookups."""
+    return tuple(dim)
+
+
+@lru_cache(maxsize=None)
+def _preferred_dim_symbol_map() -> dict[tuple[int, ...], str]:
+    """Cache symbols for SI-coherent units (scale 1) to speed canonicalisation."""
+    from quantium.core.utils import preferred_symbol_for_dim
+    from quantium.units.registry import DEFAULT_REGISTRY
+
+    mapping: dict[tuple[int, ...], str] = {}
+    for name, unit in DEFAULT_REGISTRY.all().items():
+        sym = preferred_symbol_for_dim(unit.dim)
+        if sym:
+            mapping.setdefault(_dim_key(unit.dim), sym)
+    return mapping
+
+
+def _match_preferred_power(dim: Dim) -> tuple[str, int] | None:
+    """Detect if ``dim`` is a power of a known preferred symbol dimension."""
+    base_map = _preferred_dim_symbol_map()
+    for base_dim_tuple, symbol in base_map.items():
+        base_dim = base_dim_tuple
+        if dim_pow(base_dim, -1) == dim:
+            return symbol, -1
+        for power in range(2, _MAX_CANON_POWER + 1):
+            if dim_pow(base_dim, power) == dim:
+                return symbol, power
+            if dim_pow(base_dim, -power) == dim:
+                return symbol, -power
+    return None
+
+
+def _canonical_unit_for_dim(dim: Dim) -> Unit:
+    """Return a canonical unit (scale 1) for the provided dimension."""
+    if dim == DIM_0:
+        return Unit("", 1.0, DIM_0)
+
+    from quantium.core.utils import format_dim, preferred_symbol_for_dim
+
+    sym = preferred_symbol_for_dim(dim)
+    if sym:
+        return Unit(sym, 1.0, dim)
+
+    match = _match_preferred_power(dim)
+    if match:
+        base_sym, power = match
+        name = _normalize_power_name(f"{base_sym}^{power}")
+        return Unit(name, 1.0, dim)
+
+    name = format_dim(dim)
+    if name == "1":
+        return Unit("", 1.0, DIM_0)
+    return Unit(name, 1.0, dim)
+
+
+def _si_to_value_unit(mag_si: float, dim: Dim) -> tuple[float, Unit]:
+    """Convert an SI magnitude into a value/unit tuple using canonical units."""
+    unit = _canonical_unit_for_dim(dim)
+    return mag_si / unit.scale_to_si, unit
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,20 +454,16 @@ class Quantity:
 
         # quantity × unit
         if isinstance(other, Unit):
-            new_unit = self.unit * other
-
-            if new_unit.dim == DIM_0:
-                # Result is dimensionless. Calculate the new SI mag and use a scale=1 unit.
-                new_mag_si = self._mag_si * other.scale_to_si
-                unit_dimless = Unit('', 1.0, DIM_0)
-                return Quantity(new_mag_si, unit_dimless) # Pass SI mag as value
-
-            return Quantity(self.value, new_unit)
+            result_mag_si = self._mag_si * other.scale_to_si
+            result_dim = dim_mul(self.dim, other.dim)
+            value, unit = _si_to_value_unit(result_mag_si, result_dim)
+            return Quantity(value, unit)
         
         # quantity × quantity
-        new_unit = self.unit * other.unit
-        # convert SI magnitude back to the composed unit
-        return Quantity((self._mag_si * other._mag_si) / new_unit.scale_to_si, new_unit)
+        result_mag_si = self._mag_si * other._mag_si
+        result_dim = dim_mul(self.dim, other.dim)
+        value, unit = _si_to_value_unit(result_mag_si, result_dim)
+        return Quantity(value, unit)
 
     def __rmul__(self, other: float | int) -> "Quantity":
         # allows 3 * (2 m) -> 6 m
@@ -413,33 +476,25 @@ class Quantity:
         
         # quantity / unit
         if isinstance(other, Unit):
-            new_unit = self.unit / other
-            if new_unit.dim == DIM_0:
-                # Result is dimensionless. Calculate the new SI mag and use a scale=1 unit.
-                new_mag_si = self._mag_si / other.scale_to_si
-                unit_dimless = Unit('', 1.0, DIM_0)
-                return Quantity(new_mag_si, unit_dimless) # Pass SI mag as value
-            
-            return Quantity(self.value, new_unit)
+            result_mag_si = self._mag_si / other.scale_to_si
+            result_dim = dim_div(self.dim, other.dim)
+            value, unit = _si_to_value_unit(result_mag_si, result_dim)
+            return Quantity(value, unit)
 
         # quantity / quantity
-        new_unit = self.unit / other.unit
-        if new_unit.dim == DIM_0:
-            # dimensionless quantity has no name
-            new_unit = Unit('', 1.0, DIM_0)
-
-        return Quantity((self._mag_si / other._mag_si) / new_unit.scale_to_si, new_unit)
+        result_mag_si = self._mag_si / other._mag_si
+        result_dim = dim_div(self.dim, other.dim)
+        value, unit = _si_to_value_unit(result_mag_si, result_dim)
+        return Quantity(value, unit)
 
     def __rtruediv__(self, other: float | int) -> "Quantity":
         # scalar / quantity  -> returns Quantity with inverse dimension
         if not isinstance(other, (int, float)):
             return NotImplemented
-        
-        new_dim = dim_div(DIM_0, self.dim)  # or dim_pow(self.dim, -1)
-        new_unit_name = f"{1}/{self.unit.name}"
-        new_scale = 1.0 / self.unit.scale_to_si
-        new_unit = Unit(new_unit_name, new_scale, new_dim)
-        return Quantity((float(other) / self._mag_si) / new_unit.scale_to_si, new_unit)
+        result_dim = dim_div(DIM_0, self.dim)
+        result_mag_si = float(other) / self._mag_si
+        value, unit = _si_to_value_unit(result_mag_si, result_dim)
+        return Quantity(value, unit)
 
     def __pow__(self, n: int) -> "Quantity":
         new_unit = self.unit ** n
