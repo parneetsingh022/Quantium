@@ -29,10 +29,12 @@ import math
 import re
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
+from quantium.core.utils import _tokenize_name_merge
 from quantium.units.parser import extract_unit_expr
-from typing import Union
+from typing import Dict, List, Tuple, Union
 
 Number = Union[int, float]
+SymbolComponents = Dict[str, Tuple[int, Tuple[int, int]]]
 _POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
 
 def _normalize_power_name(name: str) -> str:
@@ -55,6 +57,8 @@ def _normalize_power_name(name: str) -> str:
 
 
 _MAX_CANON_POWER = 12
+
+_ALLOWED_CANON_PREFIX_SYMBOLS = frozenset({"T", "G", "M", "k", "m", "µ", "p"})
 
 
 def _dim_key(dim: Dim) -> tuple[int, ...]:
@@ -114,8 +118,294 @@ def _canonical_unit_for_dim(dim: Dim) -> Unit:
     return Unit(name, 1.0, dim)
 
 
-def _si_to_value_unit(mag_si: float, dim: Dim) -> tuple[float, Unit]:
+def _unit_symbol_map(unit: "Unit", priority: int = 0) -> SymbolComponents:
+    if not unit.name:
+        return {}
+
+    raw = list(_tokenize_name_merge(unit.name).items())
+    if raw:
+        mapping: SymbolComponents = {}
+        for idx, (symbol, exponent) in enumerate(raw):
+            mapping[symbol] = (exponent, (priority, idx))
+        return mapping
+
+    # Fallback for simple units that tokeniser didn't decompose (e.g., "cm")
+    return {unit.name: (1, (priority, 0))}
+
+
+def _scale_symbol_map(components: SymbolComponents, factor: int) -> SymbolComponents:
+    if factor == 1:
+        return dict(components)
+    scaled: SymbolComponents = {}
+    for symbol, (exponent, order) in components.items():
+        new_exp = exponent * factor
+        if new_exp != 0:
+            scaled[symbol] = (new_exp, order)
+    return scaled
+
+
+def _combine_symbol_maps(*maps: SymbolComponents) -> SymbolComponents:
+    combined: SymbolComponents = {}
+    for mapping in maps:
+        for symbol, (exponent, order) in mapping.items():
+            if exponent == 0:
+                continue
+            if symbol in combined:
+                existing_exp, existing_order = combined[symbol]
+                new_exp = existing_exp + exponent
+                if new_exp == 0:
+                    combined.pop(symbol, None)
+                    continue
+                combined[symbol] = (new_exp, min(existing_order, order))
+            else:
+                combined[symbol] = (exponent, order)
+    return combined
+
+
+def _format_unit_components(components: SymbolComponents) -> str:
+    if not components:
+        return ""
+
+    def fmt(sym: str, exp: int) -> str:
+        if abs(exp) == 1:
+            return sym
+        return f"{sym}^{abs(exp)}"
+
+    positives: List[str] = []
+    negatives: List[str] = []
+
+    for sym in sorted(components):
+        exp, _ = components[sym]
+        if exp > 0:
+            positives.append(fmt(sym, exp))
+        elif exp < 0:
+            negatives.append(fmt(sym, exp))
+
+    numerator = "·".join(positives) if positives else "1"
+    denominator = "·".join(negatives)
+
+    if denominator:
+        if "·" in denominator:
+            denominator = f"({denominator})"
+        return f"{numerator}/{denominator}"
+    return numerator
+
+
+def _dim_single_axis(dim: Dim) -> tuple[int, int] | None:
+    axes = [idx for idx, power in enumerate(dim) if power != 0]
+    if len(axes) != 1:
+        return None
+    axis = axes[0]
+    return axis, dim[axis]
+
+
+def _choose_symbol_for_axis(
+    components: SymbolComponents,
+    axis_idx: int,
+    target_exp: int,
+) -> Unit | None:
+    from quantium.units.registry import DEFAULT_REGISTRY
+
+    target_sign = 1 if target_exp > 0 else -1
+    best: tuple[str, int, Unit] | None = None
+    best_score = -1
+    fallback: tuple[str, int, Unit] | None = None
+    fallback_score = -1
+
+    ordered_items = sorted(components.items(), key=lambda item: item[1][1])
+
+    for symbol, (exponent, _) in ordered_items:
+        if exponent == 0:
+            continue
+        try:
+            candidate = DEFAULT_REGISTRY.get(symbol)
+        except ValueError:
+            continue
+
+        axis_info = _dim_single_axis(candidate.dim)
+        if axis_info is None:
+            continue
+
+        cand_axis, _ = axis_info
+        if cand_axis != axis_idx:
+            continue
+
+        score = abs(exponent)
+        entry = (symbol, exponent, candidate)
+
+        if (exponent > 0 and target_sign > 0) or (exponent < 0 and target_sign < 0):
+            if score > best_score:
+                best = entry
+                best_score = score
+        else:
+            if score > fallback_score:
+                fallback = entry
+                fallback_score = score
+
+    chosen = best or fallback
+    if not chosen:
+        return None
+
+    _, _, unit = chosen
+    return unit
+
+
+def _unit_from_components(components: SymbolComponents) -> Unit | None:
+    """Reconstruct a composite unit from component symbol exponents."""
+    if not components:
+        return None
+
+    from quantium.units.registry import DEFAULT_REGISTRY
+
+    def _mul_units(units: list[Unit]) -> Unit | None:
+        result: Unit | None = None
+        for u in units:
+            result = u if result is None else result * u
+        return result
+
+    numer_parts: list[Unit] = []
+    denom_parts: list[Unit] = []
+
+    for symbol, (exponent, _) in components.items():
+        if exponent == 0:
+            continue
+        try:
+            base = DEFAULT_REGISTRY.get(symbol)
+        except ValueError:
+            return None
+
+        abs_exp = abs(exponent)
+        unit_part = base if abs_exp == 1 else (base ** abs_exp)
+        if exponent > 0:
+            numer_parts.append(unit_part)
+        else:
+            denom_parts.append(unit_part)
+
+    numerator = _mul_units(numer_parts)
+    denominator = _mul_units(denom_parts)
+
+    if numerator is None and denominator is None:
+        return Unit("", 1.0, DIM_0)
+    if numerator is None:
+        numerator = Unit("", 1.0, DIM_0)
+    if denominator is None:
+        return numerator
+    return numerator / denominator
+
+
+def _si_to_value_unit(
+    mag_si: float,
+    dim: Dim,
+    components: SymbolComponents | None = None,
+    requested_unit: Unit | None = None,
+) -> tuple[float, Unit]:
     """Convert an SI magnitude into a value/unit tuple using canonical units."""
+    if dim == DIM_0:
+        unit = Unit("", 1.0, DIM_0)
+        return mag_si / unit.scale_to_si, unit
+
+    def _should_preserve(name: str) -> bool:
+        return not any(ch in name for ch in ("*", "/", "^", "·"))
+
+    if requested_unit is not None and _should_preserve(requested_unit.name):
+        return mag_si / requested_unit.scale_to_si, requested_unit
+
+    if components:
+        single_axis = _dim_single_axis(dim)
+        if single_axis is not None:
+            axis_idx, target_exp = single_axis
+            chosen = _choose_symbol_for_axis(components, axis_idx, target_exp)
+            if chosen is not None:
+                final_unit = chosen ** target_exp
+
+                if (
+                    requested_unit is None
+                    and abs(target_exp) == 1
+                ):
+                    from quantium.core.utils import preferred_symbol_for_dim
+                    from quantium.units.registry import DEFAULT_REGISTRY, PREFIXES
+
+                    pref_sym = preferred_symbol_for_dim(dim)
+                    if pref_sym and final_unit.name == pref_sym and dim != DIM_0:
+                        allowed_prefixes = [
+                            p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS
+                        ]
+
+                        candidates: list[tuple[float, Unit]] = []
+
+                        base_value = mag_si / final_unit.scale_to_si
+                        candidates.append((base_value, final_unit))
+
+                        for prefix in allowed_prefixes:
+                            symbol = f"{prefix.symbol}{pref_sym}"
+                            try:
+                                candidate_unit = DEFAULT_REGISTRY.get(symbol)
+                            except Exception:
+                                continue
+                            if target_exp == -1:
+                                candidate_unit = candidate_unit ** -1
+                            candidate_value = mag_si / candidate_unit.scale_to_si
+                            candidates.append((candidate_value, candidate_unit))
+
+                        def _score(entry: tuple[float, Unit]) -> tuple[int, float]:
+                            value, _ = entry
+                            if value == 0.0:
+                                return (0, 0.0)
+                            abs_val = abs(value)
+                            if 1.0 <= abs_val < 1000.0:
+                                return (0, abs(math.log10(abs_val)))
+                            return (1, abs(math.log10(abs_val)))
+
+                        best_value, best_unit = min(candidates, key=_score)
+                        return best_value, best_unit
+
+                return mag_si / final_unit.scale_to_si, final_unit
+
+        composite = _unit_from_components(components)
+        if composite is not None and composite.dim == dim:
+            from quantium.core.utils import preferred_symbol_for_dim
+            from quantium.units.registry import DEFAULT_REGISTRY, PREFIXES
+
+            pref_sym = preferred_symbol_for_dim(dim)
+            if pref_sym and dim != DIM_0:
+                try:
+                    pref_unit = DEFAULT_REGISTRY.get(pref_sym)
+                except Exception:
+                    pref_unit = None
+
+                if pref_unit is not None and pref_unit.scale_to_si > 0:
+                    allowed_prefixes = [
+                        p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS
+                    ]
+
+                    candidates: list[tuple[float, Unit]] = []
+
+                    base_value = mag_si / pref_unit.scale_to_si
+                    candidates.append((base_value, pref_unit))
+
+                    for prefix in allowed_prefixes:
+                        symbol = f"{prefix.symbol}{pref_sym}"
+                        try:
+                            candidate_unit = DEFAULT_REGISTRY.get(symbol)
+                        except Exception:
+                            continue
+                        candidate_value = mag_si / candidate_unit.scale_to_si
+                        candidates.append((candidate_value, candidate_unit))
+
+                    def _score(entry: tuple[float, Unit]) -> tuple[int, float]:
+                        value, _ = entry
+                        if value == 0.0:
+                            return (0, 0.0)
+                        abs_val = abs(value)
+                        if 1.0 <= abs_val < 1000.0:
+                            return (0, abs(math.log10(abs_val)))
+                        return (1, abs(math.log10(abs_val)))
+
+                    best_value, best_unit = min(candidates, key=_score)
+                    return best_value, best_unit
+
+            return mag_si / composite.scale_to_si, composite
+
     unit = _canonical_unit_for_dim(dim)
     return mag_si / unit.scale_to_si, unit
 
@@ -157,7 +447,13 @@ class Unit:
         )
         
     def __rmul__(self, value: float) -> Quantity:
-        return Quantity(float(value), self)
+        scalar = float(value)
+        if scalar == 0.0:
+            mag_si = 0.0  # keep exact zero to avoid floating noise
+            components = _unit_symbol_map(self)
+            val, unit = _si_to_value_unit(mag_si, self.dim, components)
+            return Quantity(val, unit)
+        return Quantity(scalar, self)
     
     def __mul__(self, other: "Unit") -> "Unit":
         new_dim = dim_mul(self.dim, other.dim)
@@ -173,8 +469,25 @@ class Unit:
             new_unit_name = _normalize_power_name(f"{base_name}^2")
             return Unit(new_unit_name, new_scale, new_dim)
 
-        # Otherwise compose normally.
-        new_unit_name = f"{self.name}·{other.name}"
+        components = _combine_symbol_maps(
+            _unit_symbol_map(self, 0),
+            _unit_symbol_map(other, 1),
+        )
+
+        if (
+            new_dim != DIM_0
+            and isclose(new_scale, 1.0, rel_tol=1e-12, abs_tol=0.0)
+            and "1" not in components
+        ):
+            from quantium.core.utils import preferred_symbol_for_dim
+
+            preferred = preferred_symbol_for_dim(new_dim)
+            if preferred:
+                return Unit(preferred, 1.0, new_dim)
+
+        new_unit_name = _format_unit_components(components)
+        if new_dim == DIM_0:
+            new_unit_name = ""
         return Unit(new_unit_name, new_scale, new_dim)
 
 
@@ -182,13 +495,25 @@ class Unit:
         new_dim = dim_div(self.dim, other.dim)
         new_scale = self.scale_to_si / other.scale_to_si
 
-        # Parenthesize denominator if it's compound to avoid flattening like "W·s/N·s/m^2"
-        def _needs_paren(name: str) -> bool:
-            # name contains any operator that would change precedence if ungrouped
-            return any(op in name for op in ("·", "*", "/")) and not (name.startswith("(") and name.endswith(")"))
+        components = _combine_symbol_maps(
+            _unit_symbol_map(self, 0),
+            _scale_symbol_map(_unit_symbol_map(other, 1), -1),
+        )
 
-        right = f"({other.name})" if _needs_paren(other.name) else other.name
-        new_unit_name = f"{self.name}/{right}"
+        if (
+            new_dim != DIM_0
+            and isclose(new_scale, 1.0, rel_tol=1e-12, abs_tol=0.0)
+            and "1" not in components
+        ):
+            from quantium.core.utils import preferred_symbol_for_dim
+
+            preferred = preferred_symbol_for_dim(new_dim)
+            if preferred:
+                return Unit(preferred, 1.0, new_dim)
+
+        new_unit_name = _format_unit_components(components)
+        if new_dim == DIM_0:
+            new_unit_name = ""
 
         return Unit(new_unit_name, new_scale, new_dim)
     
@@ -200,36 +525,24 @@ class Unit:
             )
 
         new_dim = dim_div(DIM_0, self.dim)
-        name = self.name
-
-        if name.startswith("1/"):
-            # 1/(1/x) -> x
-            name = name[2:]
-        else:
-            m = _POWER_RE.match(name)
-            if m:
-                base = m.group("base")
-                k = int(m.group("exp"))
-                name = f"{base}^{-k}"    # 1/(s^-3) -> s^3, 1/(s^3) -> s^-3
-            else:
-                name = f"{name}^-1"      # 1/s -> s^-1   (key change)
-        
-        normalized_name = _normalize_power_name(name)
+        components = _scale_symbol_map(_unit_symbol_map(self, 0), -1)
         new_scale = 1 / self.scale_to_si
-        return Unit(normalized_name, new_scale, new_dim)
+        new_name = _format_unit_components(components)
+        if new_dim == DIM_0:
+            new_name = ""
+        return Unit(new_name, new_scale, new_dim)
         
 
     def __pow__(self, n: int) -> Unit:
         new_dim = dim_pow(self.dim, n)
         # Canonical naming:
         if n == 0:
-            new_unit_name = f"{self.name}^0"  # or maybe a specific "dimensionless" name if you prefer
-        elif n == 1:
-            new_unit_name = self.name
+            normalized_name = ""
         else:
-            new_unit_name = f"{self.name}^{n}"   # handles negatives like s^-3
-
-        normalized_name = _normalize_power_name(new_unit_name)
+            components = _scale_symbol_map(_unit_symbol_map(self, 0), n)
+            normalized_name = _format_unit_components(components)
+            if not normalized_name:
+                normalized_name = ""
 
         new_scale = self.scale_to_si ** n
         return Unit(normalized_name, new_scale, new_dim)
@@ -256,6 +569,9 @@ class Quantity:
         self._mag_si = float(value) * unit.scale_to_si
         self.dim = unit.dim
         self.unit = unit
+
+    def _symbol_component_map(self, priority: int) -> SymbolComponents:
+        return _unit_symbol_map(self.unit, priority)
         
     def _check_dim_compatible(self, other: object) -> None:
         """Internal helper to raise TypeError on dimension mismatch."""
@@ -264,7 +580,7 @@ class Quantity:
             if isinstance(other, (int, float)) and other == 0:
                 if self.dim != DIM_0:
                     raise TypeError("Cannot compare a dimensioned quantity to 0")
-                return # It's a 0 dimensionless quantity, OK
+                return  # It's a 0 dimensionless quantity, OK
             raise TypeError(f"Cannot compare Quantity with type {type(other)}")
 
         if self.dim != other.dim:
@@ -385,8 +701,10 @@ class Quantity:
         # The dim check has already passed at this point.
         if new_unit.name == self.unit.name:
             return self
-        
-        return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
+
+        components = _unit_symbol_map(new_unit)
+        value, unit = _si_to_value_unit(self._mag_si, self.dim, components, new_unit)
+        return Quantity(value, unit)
         
     
     def to_si(self) -> Quantity:
@@ -456,13 +774,21 @@ class Quantity:
         if isinstance(other, Unit):
             result_mag_si = self._mag_si * other.scale_to_si
             result_dim = dim_mul(self.dim, other.dim)
-            value, unit = _si_to_value_unit(result_mag_si, result_dim)
+            components = _combine_symbol_maps(
+                self._symbol_component_map(0),
+                _unit_symbol_map(other, 1),
+            )
+            value, unit = _si_to_value_unit(result_mag_si, result_dim, components)
             return Quantity(value, unit)
         
         # quantity × quantity
         result_mag_si = self._mag_si * other._mag_si
         result_dim = dim_mul(self.dim, other.dim)
-        value, unit = _si_to_value_unit(result_mag_si, result_dim)
+        components = _combine_symbol_maps(
+            self._symbol_component_map(0),
+            other._symbol_component_map(1),
+        )
+        value, unit = _si_to_value_unit(result_mag_si, result_dim, components)
         return Quantity(value, unit)
 
     def __rmul__(self, other: float | int) -> "Quantity":
@@ -478,13 +804,21 @@ class Quantity:
         if isinstance(other, Unit):
             result_mag_si = self._mag_si / other.scale_to_si
             result_dim = dim_div(self.dim, other.dim)
-            value, unit = _si_to_value_unit(result_mag_si, result_dim)
+            components = _combine_symbol_maps(
+                self._symbol_component_map(0),
+                _scale_symbol_map(_unit_symbol_map(other, 1), -1),
+            )
+            value, unit = _si_to_value_unit(result_mag_si, result_dim, components)
             return Quantity(value, unit)
 
         # quantity / quantity
         result_mag_si = self._mag_si / other._mag_si
         result_dim = dim_div(self.dim, other.dim)
-        value, unit = _si_to_value_unit(result_mag_si, result_dim)
+        components = _combine_symbol_maps(
+            self._symbol_component_map(0),
+            _scale_symbol_map(other._symbol_component_map(1), -1),
+        )
+        value, unit = _si_to_value_unit(result_mag_si, result_dim, components)
         return Quantity(value, unit)
 
     def __rtruediv__(self, other: float | int) -> "Quantity":
@@ -493,7 +827,8 @@ class Quantity:
             return NotImplemented
         result_dim = dim_div(DIM_0, self.dim)
         result_mag_si = float(other) / self._mag_si
-        value, unit = _si_to_value_unit(result_mag_si, result_dim)
+        components = _scale_symbol_map(self._symbol_component_map(0), -1)
+        value, unit = _si_to_value_unit(result_mag_si, result_dim, components)
         return Quantity(value, unit)
 
     def __pow__(self, n: int) -> "Quantity":
@@ -526,57 +861,10 @@ class Quantity:
         is_composed = any(ch in pretty for ch in ("/", "·", "^"))
 
         if is_composed:
-            sym = preferred_symbol_for_dim(self.dim)  # e.g., "N", "A", "W", "Pa", ...
-            if sym:
-                # --- FIX: Check for zero *before* any scale/prefix logic ---
-                if self._mag_si == 0.0:
-                    mag = 0.0
-                    pretty = sym  # Show '0 N', '0 Pa', etc.
-                else:
-                    # --- All other logic is now nested in this 'else' ---
-                    scale = self.unit.scale_to_si
-
-                    # 1. Check for exact SI scale (e.g., N/m²)
-                    if abs(scale - 1.0) <= 1e-12:
-                        pretty = sym
-                        mag = self._mag_si  # Use base SI magnitude
-                    else:
-                        # 2. Check for an exact SI prefix match (e.g., kg·m/ms²)
-                        found_prefix = False
-                        for p in PREFIXES:
-                            if abs(scale - p.factor) <= 1e-12:
-                                pretty = f"{p.symbol}{sym}"
-                                mag = self._mag_si / p.factor  # Use rescaled magnitude
-                                found_prefix = True
-                                break
-
-                        # 3. NEW LOGIC: If no exact match, *now* use engineering notation
-                        #    This handles the N/cm² case (scale 10^4).
-                        if not found_prefix:
-                            mag_si = self._mag_si
-                            
-                            # Find the exponent in base 10
-                            exponent = log10(abs(mag_si))
-                            # Find the nearest SI prefix exponent (multiple of 3)
-                            prefix_exp = int(floor(exponent / 3) * 3)
-
-                            prefix_symbol = ""
-                            prefix_factor = 1.0
-
-                            if prefix_exp == 0:
-                                prefix_factor = 1.0
-                                prefix_symbol = ""
-                            else:
-                                for p in PREFIXES:
-                                    if abs(p.factor - (10**prefix_exp)) <= 1e-12:
-                                        prefix_symbol = p.symbol
-                                        prefix_factor = p.factor
-                                        break
-                            
-                            # Calculate the new magnitude
-                            mag = mag_si / prefix_factor
-                            # Create the new pretty name
-                            pretty = f"{prefix_symbol}{sym}"
+            # Respect the stored composed unit name for representation.
+            # We deliberately avoid performing an additional canonicalisation
+            # here so that `Quantity.unit.name` matches the printed output.
+            return f"{mag:.15g}" if pretty == "1" else f"{mag:.15g} {pretty}"
 
         # If the pretty name reduces to "1", show just the number
         # This also handles all non-composed units that skipped the `if` block.

@@ -1,0 +1,4 @@
+- [ ] Ensure unit canonicalization happens at creation so equivalent expressions share the same unit representation.
+- [ ] Update arithmetic and parsing paths to unify unit names (e.g., `kg·m/s^2` → `N`).
+- [ ] Extend/adjust tests to cover canonical naming consistency for derived units and prefixes.
+- [ ] Run targeted pytest (`tests/core/quantity`) after changes.

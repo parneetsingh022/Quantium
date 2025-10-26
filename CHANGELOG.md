@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),  
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.2] - **Unreleased**
+## [0.2.0] - **Unreleased**
 
 ### Fixed
-- Normalized multiplication, division, and power results so mixed-unit expressions collapse to coherent SI units (e.g., `km/m² → 1/m`, `J²·kJ³ → kJ⁵`). [#91]
-- Automatically substitute canonical SI-derived symbols when expressions reduce to them (e.g., `kg·mm/s² → 0.001 N`) while preserving `.to(...)` conversions for custom formats. [#91]
+
+- Added robust rules for multiplication/division of same-dimension units, now the symbol with the higher total power is chosen (e.g. m * cm**2 -> cm³). [#91]
+- Enhanced handling of complex mixed-prefix units (e.g. kg·mm/s² -> mN). [#91]
+- Improves readability, prefix consistency, and reduces ambiguity in derived units. [#91]
+
 
 [#91]: https://github.com/parneetsingh022/quantium/issues/91
 

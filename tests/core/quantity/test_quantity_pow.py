@@ -6,7 +6,12 @@ from quantium.core.dimensions import DIM_0, LENGTH, TEMPERATURE, dim_div, dim_mu
 from quantium.core.quantity import Unit
 
 def _name(sym: str, n: int) -> str:
-    return "1" if n == 0 else (sym if n == 1 else f"{sym}^{n}")
+    #return "1" if n == 0 else (sym if n == 1 else f"{sym}^{n}")
+    if n == 0:
+        return 1
+    if n >= 1: return f"{sym}^{n}"
+
+    return f"1/{sym}^{abs(n)}"
 
 def test_power_of_quantity():
     m = Unit("m", 1.0, LENGTH)

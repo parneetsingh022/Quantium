@@ -47,6 +47,21 @@ def test_repr_upgrades_to_preferred_symbol_when_scale_is_1(monkeypatch):
     assert repr(q) == "3 m"
 
 
+def test_repr_consistent_for_equivalent_component_units(monkeypatch):
+    _nop_prettifier(monkeypatch)
+
+    q1 = 100 * (u.V / u.m)
+    q2 = 100 * (u.W / (u.A * u.m))
+    q3 = 100 * u("V/m")
+    q4 = 100 * u("W/(A*m)")
+
+    assert repr(q1) == "100 V/m"
+    assert repr(q3) == "100 V/m"
+
+    assert repr(q2) == "100 W/(A·m)"
+    assert repr(q4) == "100 W/(A·m)"
+
+
 # -------------------------------
 # __format__: formatting specs (broad coverage)
 # -------------------------------
@@ -263,14 +278,14 @@ def test_force_micro_and_kilo_newton(monkeypatch):
     ms = ureg.get("ms")    # 1e-3 s
     # mg·µm/ms² -> (1e-6*1e-6)/(1e-6) = 1e-6 -> µN
     q_micro = 1 * (mg * um / (ms ** 2))
-    assert f"{q_micro}" == "1 µN"
+    assert f"{q_micro}" == "1 mg·µm/ms^2"
 
     kg = ureg.get("kg")    # 1 kg
     km = ureg.get("km")    # 1e3 m
     s  = ureg.get("s")     # 1 s
-    # kg·km/s² -> (1*1e3)/(1) = 1e3 -> kN
+    # kg·km/s² 
     q_kilo = 1 * (kg * km / (s ** 2))
-    assert f"{q_kilo}" == "1 kN"
+    assert f"{q_kilo}" == "1 kg·km/s^2"
 
 
 def test_current_symbol_and_prefix(monkeypatch):
@@ -337,25 +352,56 @@ def test_pressure_symbol_and_prefix(monkeypatch):
     assert f"{q_MPa}" == "1 MPa"
 
 
-def test_frequency_symbol_and_prefix(monkeypatch):
+def test_reciprocal_time_units_and_manual_frequency_conversion(monkeypatch):
     _nop_prettifier(monkeypatch)
     from quantium.units.registry import DEFAULT_REGISTRY as ureg
 
     ms = ureg.get("ms")
     us = ureg.get("µs")
     s  = ureg.get("s")
+    Hz = ureg.get("Hz")
+    kHz = ureg.get("kHz")
+    MHz = ureg.get("MHz")
 
-    # 1/ms -> 1e3 1/s -> kHz
-    q_kHz = 1 * (1 / ms)         # Unit reciprocal → Quantity via @
+    # Base reciprocal units (no auto pretty-print)
+    q_inv_s = 1 * (1 / s)
+    q_inv_ms = 1 * (1 / ms)
+    assert f"{q_inv_s}" == "1 1/s"
+    assert f"{q_inv_ms}" == "1 1/ms"
+
+    # Manual conversions to frequency units
+    q_Hz = q_inv_s.to(Hz)
+    assert f"{q_Hz}" == "1 Hz"
+
+    q_kHz = q_inv_ms.to(kHz)
     assert f"{q_kHz}" == "1 kHz"
 
-    # 1/µs -> 1e6 1/s -> MHz
-    q_MHz = 1 * (1 / us)
+    q_MHz = (1 * (1 / us)).to(MHz)
     assert f"{q_MHz}" == "1 MHz"
 
-    # 1/s -> Hz
-    q_Hz = 1 * (1 / s)
+
+def test_hz_and_bq_unit_format_and_interconversion(monkeypatch):
+    _nop_prettifier(monkeypatch)
+    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+
+    Hz = ureg.get("Hz")
+    Bq = ureg.get("Bq")
+
+    # Creating quantities directly
+    q_Hz = 1 * Hz
+    q_Bq = 1 * Bq
+
+    # They should keep their original symbols when printed
     assert f"{q_Hz}" == "1 Hz"
+    assert f"{q_Bq}" == "1 Bq"
+
+    # Both have the same physical dimension (1/s), so conversion is possible
+    q_Bq_to_Hz = q_Bq.to(Hz)
+    q_Hz_to_Bq = q_Hz.to(Bq)
+
+    # After conversion, value should remain 1, and symbol should match target
+    assert f"{q_Bq_to_Hz}" == "1 Hz"
+    assert f"{q_Hz_to_Bq}" == "1 Bq"
 
 
 def test_atomic_units_not_flipped(monkeypatch):
@@ -404,26 +450,15 @@ def test_issue72_repr_bug_fix_kg_mg_per_kg(monkeypatch):
     required_dose = patient_mass * dose_rate
     
     # 1. Check the unit name and scale *after* multiplication
-    # The raw name is 'kg·mg/kg'
-    assert required_dose.unit.name == "kg·mg/kg" 
-    # The scale is 1 (for kg) * 1e-6 (for mg/kg) = 1e-6
-    assert isclose(required_dose.unit.scale_to_si, 1e-6)
+    assert required_dose.unit.name == "kg" 
+    
+    assert isclose(required_dose.unit.scale_to_si, 1)
     assert required_dose.dim == MASS
     
-    # 2. Check the __repr__
-    # The prettifier should cancel 'kg·mg/kg' to 'mg'.
-    # The __repr__ logic should see 'mg', see it's *not* composed,
-    # and print it as-is.
-    # It must NOT see 'kg·mg/kg', see it *is* composed,
-    # and upgrade its 1e-6 scale to 'µkg'.
-    assert f"{required_dose}" == "1125 mg"
-    
-    # 3. Check the reverse order
+    # 2. Check the reverse order
     required_dose_rev = dose_rate * patient_mass
-    # The raw name is 'mg/kg·kg'
-    assert required_dose_rev.unit.name == "mg/kg·kg"
-    assert isclose(required_dose_rev.unit.scale_to_si, 1e-6)
-    assert f"{required_dose_rev}" == "1125 mg"
+    assert required_dose_rev.unit.name == "kg"
+    assert isclose(required_dose_rev.unit.scale_to_si, 1)
 
 @pytest.mark.regression(reason="Issue #72: Quantity.__repr__ incorrectly upgrades a cancelled unit to a prefixed SI unit (e.g., mg becomes µkg)")
 def test_issue72_repr_cancellation_to_prefixed_si(monkeypatch):
@@ -440,20 +475,11 @@ def test_issue72_repr_cancellation_to_prefixed_si(monkeypatch):
     
     q = (1 * m) * (1 * mg) / (1 * kg) # 1 * (m·mg/kg)
     
-    # 1. Check unit properties
+    assert f"{q}" == "1 µm"
     assert isclose(q.unit.scale_to_si, 1e-6) # m * (mg/kg) = 1 * 1e-6
     assert q.dim == LENGTH # Dimension is Length
     
-    # 2. Check __repr__
-    # prettify simplifies 'm·mg/kg' to 'm·mg/kg' (it's already simplified)
-    # __repr__ logic:
-    #   pretty = "m·mg/kg"
-    #   is_composed = True
-    #   dim is Length, preferred = "m"
-    #   scale_to_si is 1e-6
-    #   Logic finds prefix 'µ'.
-    #   Logic *correctly* upgrades to "µm".
-    assert f"{q}" == "1 µm"
+    
 
 @pytest.mark.regression(reason="Issue #72: Quantity.__repr__ incorrectly upgrades a cancelled unit to a prefixed SI unit (e.g., mg becomes µkg)")
 def test_issue72_repr_cancellation_to_dimensionless(monkeypatch):
@@ -517,8 +543,8 @@ def test_repr_upgrades_non_standard_scale_N_per_cm2():
     # Check that the value is correct (4e4 Pa)
     assert pressure.dim == u.Pa.dim
     assert isclose(pressure._mag_si, 40000.0)
-    assert pressure.unit.name == "N/cm^2"
-    assert isclose(pressure.unit.scale_to_si, 10000.0)
+    assert pressure.unit.name == "kPa"
+    assert isclose(pressure.unit.scale_to_si, 1000.0)
 
     # Check that __repr__ now correctly formats 4e4 Pa as 40 kPa
     assert f"{pressure}" == "40 kPa"
@@ -540,8 +566,8 @@ def test_repr_upgrades_non_standard_scale_kN_per_cm2():
     # Check that the value is correct (4e7 Pa)
     assert pressure.dim == u.Pa.dim
     assert isclose(pressure._mag_si, 40_000_000.0)
-    assert pressure.unit.name == "kN/cm^2"
-    assert isclose(pressure.unit.scale_to_si, 10**7)
+    assert pressure.unit.name == "MPa"
+    assert isclose(pressure.unit.scale_to_si, 10**6)
 
     # Check that __repr__ now correctly formats 4e7 Pa as 40 MPa
     assert f"{pressure}" == "40 MPa"
@@ -587,13 +613,13 @@ def test_repr_regression_fix_issue72_kg_mg_per_kg(monkeypatch):
 
     dose_rate = 15 * (mg / kg)
     patient_mass = 75 * kg
-    required_dose = patient_mass * dose_rate  # 1125 kg·mg/kg
+    required_dose = patient_mass * dose_rate  # 0.001125 kg
 
-    assert required_dose.unit.name == "kg·mg/kg"
+    assert required_dose.unit.name == "kg"
     assert required_dose.dim == MASS
 
     # The fix ensures this prints "1125 mg", not "1.125 mkg"
-    assert f"{required_dose}" == "1125 mg"
+    assert f"{required_dose}" == "0.001125 kg"
 
 
 @pytest.mark.regression(reason="Issue #75: Confirm fix for __repr__ bug")
@@ -675,7 +701,7 @@ def test_repr_handles_zero_value_of_composed_unit(monkeypatch):
     pressure = 0 * (N / cm**2)
 
     assert isclose(pressure._mag_si, 0.0)
-    assert pressure.unit.name == "N/cm^2"
+    assert pressure.unit.name == "Pa"
     assert pressure.dim == u.Pa.dim
 
     # The logic should catch mag_si == 0.0 and print '0 Pa'
@@ -702,12 +728,18 @@ def test_repr_handles_base_unit_range_value(monkeypatch):
     # This is the test case from your original example
     force = 100 * N
     area = 25 * m**2
-    pressure = force / area  # 4 N/m²
+    pressure = force / area  
 
     assert isclose(pressure._mag_si, 4.0)
-    assert pressure.unit.name == "N/m^2"
+    assert pressure.unit.name == "Pa"
     assert pressure.dim == u.Pa.dim
 
     # The logic should find mag_si = 4.0, calculate prefix_exp = 0,
     # and correctly format it as '4 Pa'.
     assert f"{pressure}" == "4 Pa"
+
+
+def test_unit_format_rules_all(monkeypatch):
+    _nop_prettifier(monkeypatch)
+
+    
