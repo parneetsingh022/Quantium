@@ -366,6 +366,18 @@ def _si_to_value_unit(
             from quantium.core.utils import preferred_symbol_for_dim
             from quantium.units.registry import DEFAULT_REGISTRY, PREFIXES
 
+            match = _match_preferred_power(dim)
+            if match:
+                base_sym, power = match
+                try:
+                    base_unit = DEFAULT_REGISTRY.get(base_sym)
+                except Exception:
+                    base_unit = None
+
+                if base_unit is not None:
+                    canonical_unit = base_unit ** power
+                    return mag_si / canonical_unit.scale_to_si, canonical_unit
+
             pref_sym = preferred_symbol_for_dim(dim)
             if pref_sym and dim != DIM_0:
                 try:
