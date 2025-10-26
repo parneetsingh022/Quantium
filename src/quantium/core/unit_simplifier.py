@@ -86,26 +86,26 @@ class UnitNameSimplifier:
 
     def canonical_unit_for_dim(self, dim: Dim) -> "Unit":
         """Return a canonical unit (scale 1) for the provided dimension."""
-        Unit = self._unit_cls
+        unit_cls = self._unit_cls
         if dim == DIM_0:
-            return Unit("", 1.0, DIM_0)
+            return unit_cls("", 1.0, DIM_0)
 
         from quantium.core.utils import format_dim, preferred_symbol_for_dim
 
         sym = preferred_symbol_for_dim(dim)
         if sym:
-            return Unit(sym, 1.0, dim)
+            return unit_cls(sym, 1.0, dim)
 
         match = self._match_preferred_power(dim)
         if match:
             base_sym, power = match
             name = self.normalize_power_name(f"{base_sym}^{power}")
-            return Unit(name, 1.0, dim)
+            return unit_cls(name, 1.0, dim)
 
         name = format_dim(dim)
         if name == "1":
-            return Unit("", 1.0, DIM_0)
-        return Unit(name, 1.0, dim)
+            return unit_cls("", 1.0, DIM_0)
+        return unit_cls(name, 1.0, dim)
 
     # ------------------------------------------------------------------
     # Symbol component utilities
@@ -274,11 +274,11 @@ class UnitNameSimplifier:
         numerator = _mul_units(numer_parts)
         denominator = _mul_units(denom_parts)
 
-        Unit = self._unit_cls
+        unit_cls = self._unit_cls
         if numerator is None and denominator is None:
-            return Unit("", 1.0, DIM_0)
+            return unit_cls("", 1.0, DIM_0)
         if numerator is None:
-            numerator = Unit("", 1.0, DIM_0)
+            numerator = unit_cls("", 1.0, DIM_0)
         if denominator is None:
             return numerator
         return numerator / denominator
@@ -294,10 +294,10 @@ class UnitNameSimplifier:
         requested_unit: "Unit" | None = None,
     ) -> tuple[float, "Unit"]:
         """Convert an SI magnitude into a value/unit tuple using canonical units."""
-        Unit = self._unit_cls
+        unit_cls = self._unit_cls
 
         if dim == DIM_0:
-            unit = Unit("", 1.0, DIM_0)
+            unit = unit_cls("", 1.0, DIM_0)
             return mag_si / unit.scale_to_si, unit
 
         def _should_preserve(name: str) -> bool:
@@ -324,10 +324,10 @@ class UnitNameSimplifier:
                                 p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS
                             ]
 
-                            candidates: list[tuple[float, "Unit"]] = []
+                            prefix_candidates: list[tuple[float, "Unit"]] = []
 
                             base_value = mag_si / final_unit.scale_to_si
-                            candidates.append((base_value, final_unit))
+                            prefix_candidates.append((base_value, final_unit))
 
                             for prefix in allowed_prefixes:
                                 symbol = f"{prefix.symbol}{pref_sym}"
@@ -338,7 +338,7 @@ class UnitNameSimplifier:
                                 if target_exp == -1:
                                     candidate_unit = candidate_unit ** -1
                                 candidate_value = mag_si / candidate_unit.scale_to_si
-                                candidates.append((candidate_value, candidate_unit))
+                                prefix_candidates.append((candidate_value, candidate_unit))
 
                             def _score(entry: tuple[float, "Unit"]) -> tuple[int, float]:
                                 value, _ = entry
@@ -349,7 +349,7 @@ class UnitNameSimplifier:
                                     return (0, abs(math.log10(abs_val)))
                                 return (1, abs(math.log10(abs_val)))
 
-                            best_value, best_unit = min(candidates, key=_score)
+                            best_value, best_unit = min(prefix_candidates, key=_score)
                             return best_value, best_unit
 
                     return mag_si / final_unit.scale_to_si, final_unit
@@ -366,7 +366,7 @@ class UnitNameSimplifier:
             )
 
             if ordered_components:
-                candidates: list[tuple[str, int, "Unit", tuple[int, int]]] = []
+                component_candidates: list[tuple[str, int, "Unit", tuple[int, int]]] = []
                 total_exp = 0
                 all_same_dim = True
                 reference_dim: Dim | None = None
@@ -384,15 +384,15 @@ class UnitNameSimplifier:
                         all_same_dim = False
                         break
 
-                    candidates.append((symbol, exponent, candidate_unit, order))
+                    component_candidates.append((symbol, exponent, candidate_unit, order))
                     total_exp += exponent
 
-                if all_same_dim and candidates and total_exp != 0:
-                    def _pick_key(entry: tuple[str, int, "Unit", tuple[int, int]]):
+                if all_same_dim and component_candidates and total_exp != 0:
+                    def _pick_key(entry: tuple[str, int, "Unit", tuple[int, int]]) -> tuple[int, int, int]:
                         _, exp, _, ordt = entry
                         return (abs(exp), -ordt[0], -ordt[1])
 
-                    best = max(candidates, key=_pick_key)
+                    best = max(component_candidates, key=_pick_key)
                     _, _, reference_unit, _ = best
                     canonical_unit = reference_unit ** total_exp
                     if canonical_unit.dim == dim:
@@ -427,10 +427,10 @@ class UnitNameSimplifier:
                             p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS
                         ]
 
-                        candidates: list[tuple[float, "Unit"]] = []
+                        preferred_candidates: list[tuple[float, "Unit"]] = []
 
                         base_value = mag_si / pref_unit.scale_to_si
-                        candidates.append((base_value, pref_unit))
+                        preferred_candidates.append((base_value, pref_unit))
 
                         for prefix in allowed_prefixes:
                             symbol = f"{prefix.symbol}{pref_sym}"
@@ -439,7 +439,7 @@ class UnitNameSimplifier:
                             except Exception:
                                 continue
                             candidate_value = mag_si / candidate_unit.scale_to_si
-                            candidates.append((candidate_value, candidate_unit))
+                            preferred_candidates.append((candidate_value, candidate_unit))
 
                         def _score(entry: tuple[float, "Unit"]) -> tuple[int, float]:
                             value, _ = entry
@@ -450,7 +450,7 @@ class UnitNameSimplifier:
                                 return (0, abs(math.log10(abs_val)))
                             return (1, abs(math.log10(abs_val)))
 
-                        best_value, best_unit = min(candidates, key=_score)
+                        best_value, best_unit = min(preferred_candidates, key=_score)
                         return best_value, best_unit
 
                 return mag_si / composite.scale_to_si, composite
