@@ -741,5 +741,90 @@ def test_repr_handles_base_unit_range_value(monkeypatch):
 
 def test_unit_format_rules_all(monkeypatch):
     _nop_prettifier(monkeypatch)
+    utils.invalidate_preferred_cache()
 
-    
+    m = ureg.get("m")
+    cm = ureg.get("cm")
+
+    q_mul = (1 * m) * ((1 * cm) ** 2)
+    assert isclose(q_mul.value, 100.0)
+    assert q_mul.unit.name == "cm^3"
+
+    q_mul_rev = ((1 * cm) ** 2) * (1 * m)
+    assert isclose(q_mul_rev.value, 100.0)
+    assert q_mul_rev.unit.name == "cm^3"
+
+    q_div = (1 * m) / ((1 * cm) ** 2)
+    assert isclose(q_div.value, 100.0)
+    assert q_div.unit.name == "1/cm"
+
+    q_div_rev = ((1 * cm) ** 2) / (1 * m)
+    assert isclose(q_div_rev.value, 0.01)
+    assert q_div_rev.unit.name == "cm"
+
+    q_tie_cm_first = (1 * cm) * (1 * m)
+    assert isclose(q_tie_cm_first.value, 100.0)
+    assert q_tie_cm_first.unit.name == "cm^2"
+
+    q_tie_m_first = (1 * m) * (1 * cm)
+    assert isclose(q_tie_m_first.value, 0.01)
+    assert q_tie_m_first.unit.name == "m^2"
+
+    C = ureg.get("C")
+    uC = ureg.get("µC")
+    s = ureg.get("s")
+    ms = ureg.get("ms")
+
+    q_A = (1 * C) / (1 * s)
+    assert isclose(q_A.value, 1.0)
+    assert q_A.unit.name == "A"
+
+    q_mA = (1 * uC) / (1 * ms)
+    assert isclose(q_mA.value, 1.0)
+    assert q_mA.unit.name == "mA"
+
+    J = ureg.get("J")
+    kJ = ureg.get("kJ")
+
+    q_W = (1 * J) / (1 * s)
+    assert isclose(q_W.value, 1.0)
+    assert q_W.unit.name == "W"
+
+    q_MW = (1 * kJ) / (1 * ms)
+    assert isclose(q_MW.value, 1.0)
+    assert q_MW.unit.name == "MW"
+
+    N = ureg.get("N")
+
+    q_kPa = (1 * N) / ((1 * cm) ** 2)
+    assert isclose(q_kPa.value, 10.0)
+    assert q_kPa.unit.name == "kPa"
+
+    Pa = ureg.get("Pa")
+    kPa = ureg.get("kPa")
+
+    q_tie_pa = (1 * Pa) * (1 * kPa)
+    assert isclose(q_tie_pa.value, 1000.0)
+    assert q_tie_pa.unit.name == "Pa^2"
+
+    q_tie_kpa = (1 * kPa) * (1 * Pa)
+    assert isclose(q_tie_kpa.value, 0.001)
+    assert q_tie_kpa.unit.name == "kPa^2"
+
+    kN = ureg.get("kN")
+
+    q_force_power = ((1 * kN) ** 2) * (1 * N)
+    assert isclose(q_force_power.value, 0.001)
+    assert q_force_power.unit.name == "kN^3"
+
+    q_force_power_rev = (1 * N) * ((1 * kN) ** 2)
+    assert isclose(q_force_power_rev.value, 0.001)
+    assert q_force_power_rev.unit.name == "kN^3"
+
+    q_energy_div = ((1 * J) ** 2) / ((1 * kJ) ** 3)
+    assert isclose(q_energy_div.value, 1e-6)
+    assert q_energy_div.unit.name == "1/kJ"
+
+    q_energy_mul = ((1 * J) ** 2) * ((1 * kJ) ** 3)
+    assert isclose(q_energy_mul.value, 1e-6)
+    assert q_energy_mul.unit.name == "kJ^5"

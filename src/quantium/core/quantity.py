@@ -361,6 +361,59 @@ def _si_to_value_unit(
 
                 return mag_si / final_unit.scale_to_si, final_unit
 
+        from quantium.units.registry import DEFAULT_REGISTRY
+
+        ordered_components = sorted(
+            (
+                (symbol, exponent, order)
+                for symbol, (exponent, order) in components.items()
+                if exponent
+            ),
+            key=lambda item: item[2],
+        )
+
+        if ordered_components:
+            # If all component symbols resolve to the same base dimension we can
+            # attempt to collapse them into a single power of a single unit.
+            # Pick the "best" reference unit among the components. Previously
+            # we always used the first symbol which caused undesired results
+            # like `N * kN^2 -> N^3`. Prefer the component with the largest
+            # absolute exponent (tie-break: earlier/left-most component).
+            candidates: list[tuple[str, int, Unit, tuple[int, int]]] = []
+            total_exp = 0
+            all_same_dim = True
+            reference_dim: Dim | None = None
+
+            for symbol, exponent, order in ordered_components:
+                try:
+                    candidate_unit = DEFAULT_REGISTRY.get(symbol)
+                except ValueError:
+                    all_same_dim = False
+                    break
+
+                if reference_dim is None:
+                    reference_dim = candidate_unit.dim
+                elif candidate_unit.dim != reference_dim:
+                    all_same_dim = False
+                    break
+
+                candidates.append((symbol, exponent, candidate_unit, order))
+                total_exp += exponent
+
+            if all_same_dim and candidates and total_exp != 0:
+                # choose by (abs(exponent), -priority, -index) so larger exponents
+                # win; ties prefer lower priority (earlier operand) and then lower
+                # index.
+                def _pick_key(entry: tuple[str, int, Unit, tuple[int, int]]):
+                    _, exp, _, ordt = entry
+                    return (abs(exp), -ordt[0], -ordt[1])
+
+                best = max(candidates, key=_pick_key)
+                _, _, reference_unit, _ = best
+                canonical_unit = reference_unit ** total_exp
+                if canonical_unit.dim == dim:
+                    return mag_si / canonical_unit.scale_to_si, canonical_unit
+
         composite = _unit_from_components(components)
         if composite is not None and composite.dim == dim:
             from quantium.core.utils import preferred_symbol_for_dim
