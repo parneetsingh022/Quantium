@@ -42,7 +42,6 @@ pytest==8.4.2
 python-dateutil==2.9.0.post0
 PyYAML==6.0.3
 pyyaml_env_tag==1.1
--e git+https://github.com/parneetsingh022/quantium.git@4009c9b54b340ea92063633cc8e036a80db06038#egg=quantium
 requests==2.32.5
 roman-numerals-py==3.1.0
 setuptools==80.9.0

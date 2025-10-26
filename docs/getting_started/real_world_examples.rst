@@ -49,14 +49,15 @@ Units are fully preserved through complex mathematical expressions, like calcula
 
     potential_energy = m * g * h
     print(potential_energy)
-    print(potential_energy.to(u.kJ)) # Convert to kilojoules
+    print(potential_energy.to(u.J)) # Convert to joules
 
 Output:
 
 .. code-block::
 
-    8240.4 J
     8.2404 kJ
+    8240.4 J
+    
 
 
 --------------------------------------
@@ -103,15 +104,16 @@ Unit safety is critical in medicine. Imagine a drug dose specified as **15 mg pe
     required_dose = patient_mass * dose_rate
     print(required_dose)
 
-    # You can also convert to a different mass unit, like grams
-    print(required_dose.to(u.g))
+    # You can also convert to a different mass unit, like mg
+    print(required_dose.to(u.mg))
 
 Output:
 
 .. code-block::
 
+    0.001125 kg
     1125.0 mg
-    1.125 g
+    
 
 Quantium prevents a user from, for example, accidentally multiplying by a mass in *pounds* without conversion, or by *patient height*, which would raise a ``ValueError``.
 

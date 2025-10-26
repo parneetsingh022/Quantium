@@ -406,14 +406,19 @@ class UnitNameSimplifier:
                 match = self._match_preferred_power(dim)
                 if match:
                     base_sym, power = match
-                    try:
-                        base_unit = DEFAULT_REGISTRY.get(base_sym)
-                    except Exception:
-                        base_unit = None
+                    # Only collapse to the matched power if the base symbol was
+                    # part of the originating expression; this avoids turning
+                    # ``V/A`` into ``S^-1`` and similar cases where the user
+                    # never referenced the preferred base symbol directly.
+                    if base_sym in (components or {}):
+                        try:
+                            base_unit = DEFAULT_REGISTRY.get(base_sym)
+                        except Exception:
+                            base_unit = None
 
-                    if base_unit is not None:
-                        canonical_unit = base_unit ** power
-                        return mag_si / canonical_unit.scale_to_si, canonical_unit
+                        if base_unit is not None:
+                            canonical_unit = base_unit ** power
+                            return mag_si / canonical_unit.scale_to_si, canonical_unit
 
                 pref_sym = preferred_symbol_for_dim(dim)
                 if pref_sym and dim != DIM_0:
