@@ -200,8 +200,8 @@ def test_force_substitution_handles_submicron_inputs():
 def test_force_substitution_detects_large_prefix():
     q = (1 * u.kg) * u.m / (u.ns ** 2)
 
-    assert q.unit.name == "TN"
-    assert math.isclose(q.value, 1000_000)
+    assert q.unit.name == "GN"
+    assert math.isclose(q.value, 1_000_000_000)
 
 # --- Tests for Issue #67 ---
 
