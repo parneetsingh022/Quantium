@@ -43,7 +43,7 @@ class UnitNameSimplifier:
     # ------------------------------------------------------------------
     @staticmethod
     def normalize_power_name(name: str) -> str:
-        """Normalise power expressions such as ``x^1`` or ``x^0``."""
+        """Simplifies power expressions like 'x^1' → 'x' and 'x^0' → '1', leaving others unchanged."""
         match = _POWER_RE.match(name)
         if not match:
             return name
@@ -58,7 +58,7 @@ class UnitNameSimplifier:
     @staticmethod
     @lru_cache(maxsize=None)
     def _preferred_dim_symbol_map() -> dict[tuple[int, ...], str]:
-        """Cache symbols for SI-coherent units (scale 1)."""
+        """Builds and caches a map from dimension signatures to their preferred SI unit symbols."""
         from quantium.core.utils import preferred_symbol_for_dim
         from quantium.units.registry import DEFAULT_REGISTRY
 
