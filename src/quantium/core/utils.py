@@ -24,6 +24,8 @@ from typing import (
 )
 
 from typing import Protocol, TypeAlias, runtime_checkable
+from fractions import Fraction
+from math import isfinite
 
 # A dimension is a 7-tuple of integer exponents: (L, M, T, I, Θ, N, J)
 Dim: TypeAlias = Tuple[int, int, int, int, int, int, int]
@@ -380,7 +382,6 @@ def preferred_symbol_for_dim(dim: Dim) -> Optional[str]:
     return _PREFERRED_BY_DIM.get(_dim_key(dim))
 
 
-# Optional helper if you ever want to refresh after registering new units:
 def invalidate_preferred_cache() -> None:
     global _PREFERRED_BY_DIM
     _PREFERRED_BY_DIM = None
@@ -393,3 +394,55 @@ def invalidate_preferred_cache() -> None:
     cache_clear = getattr(_quantity, "_preferred_dim_symbol_map", None)
     if cache_clear and hasattr(cache_clear, "cache_clear"):
         cache_clear.cache_clear()
+
+
+
+def rationalize(value : int | float, *, as_fraction : bool = False, max_denominator : int = 1000) -> int | Fraction:
+    """
+    Convert a float or int to an exact rational representation.
+    
+    Parameters
+    ----------
+    value : int | float
+        The number to convert.
+    as_fraction : bool, optional
+        If True, return a Fraction; otherwise return int if denominator==1.
+    max_denominator : int, optional
+        Maximum denominator when checking float rationality.
+    
+    Returns
+    -------
+    int | Fraction
+        Exact rational representation (integer or fraction).
+    
+    Raises
+    ------
+    ValueError
+        If the number is irrational (cannot be represented exactly as a rational).
+    TypeError
+        If input type is not int or float.
+    """
+
+    # Validate type
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Expected int or float, got {type(value).__name__}")
+
+    # Integers are always rational
+    if isinstance(value, int):
+        return Fraction(value) if as_fraction else value
+
+    # Check finite float
+    if not isfinite(value):
+        raise ValueError("Value must be finite (not inf or NaN).")
+
+    # --- Attempt exact rationalization ---
+    frac = Fraction(value).limit_denominator(max_denominator)
+
+    # Verify round-trip exactness
+    if float(frac) != value:
+        raise ValueError(f"{value} cannot be exactly represented as a rational number.")
+
+    # Return type as requested
+    if as_fraction:
+        return frac
+    return frac.numerator if frac.denominator == 1 else frac

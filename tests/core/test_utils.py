@@ -1,7 +1,10 @@
 import pytest
+import math
+from fractions import Fraction
 
 # Target module
 import quantium.core.utils as utils
+
 
 # Dimension helpers
 from quantium.core.dimensions import (
@@ -222,6 +225,97 @@ def test_expand_parentheses_idempotent():
     once = utils._expand_parentheses(expr)
     twice = utils._expand_parentheses(once)
     assert once == twice
+
+#############################################
+# rationalize function test
+#############################################
+
+
+@pytest.mark.parametrize("value,expected", [
+    (0, 0),
+    (3, 3),
+    (-7, -7),
+])
+def test_integers_return_int(value, expected):
+    assert utils.rationalize(value) == expected
+
+
+@pytest.mark.parametrize("value,expected", [
+    (0, Fraction(0, 1)),
+    (3, Fraction(3, 1)),
+    (-7, Fraction(-7, 1)),
+])
+def test_integers_as_fraction(value, expected):
+    assert utils.rationalize(value, as_fraction=True) == expected
+
+
+@pytest.mark.parametrize("value,expected_frac", [
+    (0.5, Fraction(1, 2)),     # exact as float
+    (1.25, Fraction(5, 4)),    # exact as float
+    (2.0, Fraction(2, 1)),     # denominator 1 -> will return int if as_fraction=False
+    (-0.5, Fraction(-1, 2)),
+])
+def test_exact_float_rationals(value, expected_frac):
+    out = utils.rationalize(value, as_fraction=True)
+    assert out == expected_frac
+
+    out_default = utils.rationalize(value, as_fraction=False)
+    if expected_frac.denominator == 1:
+        assert isinstance(out_default, int)
+        assert out_default == expected_frac.numerator
+    else:
+        assert isinstance(out_default, Fraction)
+        assert out_default == expected_frac
+
+
+def test_returns_int_when_denominator_is_one():
+    assert utils.rationalize(2.0) == 2
+    assert isinstance(utils.rationalize(2.0), int)
+
+
+# ----- Error cases -----
+
+@pytest.mark.parametrize("value", [
+    float("inf"),
+    float("-inf"),
+    float("nan"),
+])
+def test_nonfinite_raises_value_error(value):
+    with pytest.raises(ValueError):
+        utils.rationalize(value)
+
+
+@pytest.mark.parametrize("value", [
+    math.pi,                # irrational
+    math.sqrt(2),           # irrational
+    1.3333333333,           # not exactly 4/3 as a float -> should raise
+    0.142857,               # close to 1/7 but not exact -> should raise
+])
+def test_irrational_or_nonexact_decimal_raises(value):
+    with pytest.raises(ValueError):
+        utils.rationalize(value)
+
+
+def test_type_error_on_unsupported_types():
+    with pytest.raises(TypeError):
+        utils.rationalize("3/2")  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        utils.rationalize(Fraction(3, 2))  # type: ignore[arg-type]
+
+
+# ----- max_denominator behavior -----
+
+def test_max_denominator_does_not_force_acceptance():
+    # Even with small max_denominator, 0.5 still maps to 1/2 exactly (float equality holds)
+    assert utils.rationalize(0.5, max_denominator=2) == Fraction(1, 2)
+
+    # A value like 0.142857 is not exactly equal to 1/7 in binary float;
+    # round-trip check should fail regardless of max_denominator.
+    with pytest.raises(ValueError):
+        utils.rationalize(0.142857, max_denominator=7)
+
+    with pytest.raises(ValueError):
+        utils.rationalize(0.142857, max_denominator=10_000)
 
 
 
