@@ -11,6 +11,8 @@ and unit strings in a readable scientific format (e.g., 'kg·m/s²').
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 # --- superscript + name-based prettifier (keeps units as written) ---
 import re
 from typing import (
@@ -23,10 +25,9 @@ from typing import (
     cast,
 )
 
-from typing import Protocol, TypeAlias, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-# A dimension is a 7-tuple of integer exponents: (L, M, T, I, Θ, N, J)
-Dim: TypeAlias = Tuple[int, int, int, int, int, int, int]
+from quantium.core.dimensions import Dim, snap_fraction
 
 _SUPERSCRIPTS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
 
@@ -48,6 +49,23 @@ def _expand_parentheses(name: str) -> str:
         return name
 
     s = name.replace("*", "·")  # normalize '*' to middle dot
+
+    # Track parentheses that belong to exponent expressions (e.g., m^(1/2)).
+    exponent_paren_starts: set[int] = set()
+    exponent_paren_ends: set[int] = set()
+    exponent_stack: List[int] = []
+    for idx, ch in enumerate(s):
+        if ch == "(":
+            j = idx - 1
+            while j >= 0 and s[j].isspace():
+                j -= 1
+            if j >= 0 and s[j] == "^":
+                exponent_stack.append(idx)
+        elif ch == ")":
+            if exponent_stack:
+                start_idx = exponent_stack.pop()
+                exponent_paren_starts.add(start_idx)
+                exponent_paren_ends.add(idx)
 
     def _strip_spaces(x: str) -> str:
         return re.sub(r"\s+", " ", x).strip()
@@ -105,8 +123,12 @@ def _expand_parentheses(name: str) -> str:
     innermost: List[Tuple[int, int]] = []  # (start_idx, end_idx) inclusive parens
     for idx, ch in enumerate(s):
         if ch == '(':
+            if idx in exponent_paren_starts:
+                continue
             stack.append((idx, False))
         elif ch == ')':
+            if idx in exponent_paren_ends:
+                continue
             if not stack:
                 return s  # unbalanced
             start, has_inner = stack.pop()
@@ -120,6 +142,8 @@ def _expand_parentheses(name: str) -> str:
 
     # Replace from right to left so indices remain valid
     for start, end in reversed(innermost):
+        if start in exponent_paren_starts or end in exponent_paren_ends:
+            continue
         inner = s[start + 1:end]
         inner_clean = _strip_spaces(inner)
         tokens, ops = _tokenize_linear(inner_clean)
@@ -167,13 +191,22 @@ def _expand_parentheses(name: str) -> str:
             if s[i] != '(':
                 i += 1
                 continue
+            if i in exponent_paren_starts:
+                i += 1
+                continue
             # find matching ')'
             depth = 1
             j = i + 1
             while j < n and depth > 0:
                 if s[j] == '(':
+                    if j in exponent_paren_starts:
+                        j += 1
+                        continue
                     depth += 1
                 elif s[j] == ')':
+                    if j in exponent_paren_ends:
+                        j += 1
+                        continue
                     depth -= 1
                 j += 1
             if depth != 0:
@@ -208,10 +241,10 @@ _TOKEN_RE: Pattern[str] = re.compile(
     r"""
     \s*
     # Exclude superscript digits (⁰¹²³⁴⁵⁶⁷⁸⁹) and superscript minus (⁻)
-    (?P<sym>[^·/\s^⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)
+        (?P<sym>[^·/\s^⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)
     (?:
-        \^(\(?(?P<exp1>-?\d+)\)?          # ^2 or ^(2)
-          |sup\((?P<exp2>-?\d+)\)         # ^sup(2)
+                \^(\(?(?P<exp1>-?\d+(?:/\d+)?)\)?          # ^2 or ^(3/2)
+                    |sup\((?P<exp2>-?\d+)\)         # ^sup(2)
         )
         |
         (?P<usup>[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)          # or existing unicode superscripts
@@ -223,19 +256,19 @@ _TOKEN_RE: Pattern[str] = re.compile(
 
 
 
-def _parse_exponent(m: re.Match[str]) -> int:
+def _parse_exponent(m: re.Match[str]) -> Fraction:
     e = m.group("exp1") or m.group("exp2")
     if e is not None:
-        return int(e)
+        return Fraction(e)
     us = m.group("usup")
     if us:
         # map unicode superscripts back to int
         tbl = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻", "0123456789-")
-        return int(us.translate(tbl) or "1")
-    return 1
+        return Fraction(int(us.translate(tbl) or "1"), 1)
+    return Fraction(1, 1)
 
 
-def _tokenize_name_merge(name: str) -> Dict[str, int]:
+def _tokenize_name_merge(name: str) -> Dict[str, Fraction]:
     """Merge exponents from a composed unit name; cancel identical symbols.
 
     Correctly handles sequences like 'cm/ms^3·ms' as (cm / ms^3) · ms.
@@ -244,12 +277,13 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
         return {}
 
     name = _expand_parentheses(name)
-    # Normalize ASCII separators
+    # Convert exponent markers to caret form and normalize separators
+    name = name.replace("**", "^")
     name = name.replace("*", "·")
 
     parts = re.split(r"([·/])", name)  # keep separators
     op = "·"  # last operator seen; '·' or '/'
-    exps: Dict[str, int] = {}
+    exps: Dict[str, Fraction] = {}
 
     for tok in parts:
         if not tok:
@@ -266,18 +300,22 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
             sym = m.group("sym")
             e = _parse_exponent(m)
         else:
-            sym, e = tok, 1
+            sym, e = tok, Fraction(1, 1)
 
         # Apply operator to THIS token only
         if op == "/":
             e = -e
-        exps[sym] = exps.get(sym, 0) + e
+        total = snap_fraction(exps.get(sym, Fraction(0, 1)) + e)
+        if total == 0:
+            exps.pop(sym, None)
+        else:
+            exps[sym] = total
 
         # Reset to multiply for the next token
         op = "·"
 
     # Drop zeros
-    return {k: v for k, v in exps.items() if v != 0}
+    return exps
 
 
 def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
@@ -295,17 +333,25 @@ def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
 
     exps = _tokenize_name_merge(name)
 
-    num: List[Tuple[str, int]] = sorted(
+    num: List[Tuple[str, Fraction]] = sorted(
         [(s, e) for s, e in exps.items() if e > 0], key=lambda x: x[0]
     )
-    den: List[Tuple[str, int]] = sorted(
+    den: List[Tuple[str, Fraction]] = sorted(
         [(s, -e) for s, e in exps.items() if e < 0], key=lambda x: x[0]
     )
 
-    def join(parts: List[Tuple[str, int]]) -> str:
+    def join(parts: List[Tuple[str, Fraction]]) -> str:
         if not parts:
             return "1"
-        return "·".join(f"{s}{_sup(p)}" for s, p in parts)
+        formatted: List[str] = []
+        for s, p in parts:
+            if p == 1:
+                formatted.append(s)
+            elif p.denominator == 1:
+                formatted.append(f"{s}{_sup(p.numerator)}")
+            else:
+                formatted.append(f"{s}^({p.numerator}/{p.denominator})")
+        return "·".join(formatted)
 
     num_s = join(num)
     den_s = join(den)
@@ -313,6 +359,15 @@ def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
 
 
 # ---------- Dimension → pretty unit string ----------
+def _format_power_suffix(exp: Fraction) -> str:
+    abs_exp = abs(exp)
+    if abs_exp == 1:
+        return ""
+    if abs_exp.denominator == 1:
+        return _sup(abs_exp.numerator)
+    return f"^{abs_exp.numerator}/{abs_exp.denominator}"
+
+
 def format_dim(dim: Dim) -> str:
     """
     Turn a dimension tuple (L,M,T,I,Θ,N,J) into 'kg·m/s²' style.
@@ -327,19 +382,13 @@ def format_dim(dim: Dim) -> str:
     for i in order:
         e = dim[i]
         if e > 0:
-            num.append(labels[i] + _sup(e))
+            num.append(labels[i] + _format_power_suffix(e))
         elif e < 0:
-            den.append(labels[i] + _sup(-e))
+            den.append(labels[i] + _format_power_suffix(-e))
 
     numerator = "·".join(num) if num else "1"
     denominator = "·".join(den)
     return f"{numerator}/{denominator}" if denominator else numerator
-
-
-def _dim_key(dim: Dim) -> Dim:
-    return cast(Dim, tuple(dim))
-
-
 _PREFERRED_ORDER = [ "A", "C", "N", "Pa", "J", "W", "V", "Ω", "S", "F", "Wb", "T", "H", "Hz", "lm", "lx", "Bq", "Gy", "Sv", "kat", "rad", "sr", "m", "kg", "s", "K", "mol", "cd", ]
 
 
@@ -367,8 +416,7 @@ def _build_pref_map() -> Dict[Dim, str]:
     for sym in _PREFERRED_ORDER:                 # earlier = higher preference
         u = cast(Optional[_HasDimScale], reg.get(sym))
         if u and getattr(u, "scale_to_si", None) == 1.0:
-            k = _dim_key(u.dim)
-            pref.setdefault(k, sym)              # do not overwrite if already set
+            pref.setdefault(u.dim, sym)              # do not overwrite if already set
     return pref
 
 
@@ -377,7 +425,7 @@ def preferred_symbol_for_dim(dim: Dim) -> Optional[str]:
     global _PREFERRED_BY_DIM
     if _PREFERRED_BY_DIM is None:
         _PREFERRED_BY_DIM = _build_pref_map()
-    return _PREFERRED_BY_DIM.get(_dim_key(dim))
+    return _PREFERRED_BY_DIM.get(dim)
 
 
 # Optional helper if you ever want to refresh after registering new units:

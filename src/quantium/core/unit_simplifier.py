@@ -8,28 +8,31 @@ keeping a tight coupling to ``quantium.core.quantity``.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from functools import lru_cache
 import math
 import re
 from typing import Dict, List, Tuple, TYPE_CHECKING
 
-from quantium.core.dimensions import DIM_0, Dim, dim_pow
+from quantium.core.dimensions import (
+    DIM_0,
+    Dim,
+    dim_pow,
+    rationalize_exponent,
+    snap_fraction,
+)
 from quantium.core.utils import _tokenize_name_merge
 
 if TYPE_CHECKING:  # pragma: no cover - import only used for typing
     from quantium.core.quantity import Unit
 
-SymbolComponents = Dict[str, Tuple[int, Tuple[int, int]]]
+Number = int | float | Fraction
+SymbolComponents = Dict[str, Tuple[Fraction, Tuple[int, int]]]
 
 
-_POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
+_POWER_RE = re.compile(r"^(?P<base>.+?)(?:\*\*|\^)(?P<exp>-?\d+(?:/\d+)?)$")
 _MAX_CANON_POWER = 12
 _ALLOWED_CANON_PREFIX_SYMBOLS = frozenset({"T", "G", "M", "k", "m", "\u00b5", "p"})
-
-
-def _dim_key(dim: Dim) -> tuple[int, ...]:
-    """Return a hashable key for cached dimension lookups."""
-    return tuple(dim)
 
 
 class UnitNameSimplifier:
@@ -48,33 +51,34 @@ class UnitNameSimplifier:
         if not match:
             return name
         base = match.group("base")
-        exp = int(match.group("exp"))
-        if exp == 1:
+        exp_frac = Fraction(match.group("exp"))
+        if exp_frac == 1:
             return base
-        if exp == 0:
+        if exp_frac == 0:
             return "1"
-        return f"{base}^{exp}"
+        if exp_frac.denominator == 1:
+            return f"{base}^{exp_frac.numerator}"
+        return f"{base}^({exp_frac.numerator}/{exp_frac.denominator})"
 
     @staticmethod
     @lru_cache(maxsize=None)
-    def _preferred_dim_symbol_map() -> dict[tuple[int, ...], str]:
+    def _preferred_dim_symbol_map() -> dict[Dim, str]:
         """Cache symbols for SI-coherent units (scale 1)."""
         from quantium.core.utils import preferred_symbol_for_dim
         from quantium.units.registry import DEFAULT_REGISTRY
 
-        mapping: dict[tuple[int, ...], str] = {}
+        mapping: dict[Dim, str] = {}
         for name, unit in DEFAULT_REGISTRY.all().items():
             sym = preferred_symbol_for_dim(unit.dim)
             if sym:
-                mapping.setdefault(_dim_key(unit.dim), sym)
+                mapping.setdefault(unit.dim, sym)
         return mapping
 
     @classmethod
     def _match_preferred_power(cls, dim: Dim) -> tuple[str, int] | None:
         """Detect if ``dim`` is a power of a known preferred symbol dimension."""
         base_map = cls._preferred_dim_symbol_map()
-        for base_dim_tuple, symbol in base_map.items():
-            base_dim = base_dim_tuple
+        for base_dim, symbol in base_map.items():
             if dim_pow(base_dim, -1) == dim:
                 return symbol, -1
             for power in range(2, _MAX_CANON_POWER + 1):
@@ -118,18 +122,19 @@ class UnitNameSimplifier:
         if raw:
             mapping: SymbolComponents = {}
             for idx, (symbol, exponent) in enumerate(raw):
-                mapping[symbol] = (exponent, (priority, idx))
+                mapping[symbol] = (Fraction(exponent, 1), (priority, idx))
             return mapping
 
-        return {unit.name: (1, (priority, 0))}
+        return {unit.name: (Fraction(1, 1), (priority, 0))}
 
     @staticmethod
-    def scale_symbol_map(components: SymbolComponents, factor: int) -> SymbolComponents:
-        if factor == 1:
+    def scale_symbol_map(components: SymbolComponents, factor: Number) -> SymbolComponents:
+        factor_frac = rationalize_exponent(factor)
+        if factor_frac == 1:
             return dict(components)
         scaled: SymbolComponents = {}
         for symbol, (exponent, order) in components.items():
-            new_exp = exponent * factor
+            new_exp = snap_fraction(exponent * factor_frac)
             if new_exp != 0:
                 scaled[symbol] = (new_exp, order)
         return scaled
@@ -143,7 +148,7 @@ class UnitNameSimplifier:
                     continue
                 if symbol in combined:
                     existing_exp, existing_order = combined[symbol]
-                    new_exp = existing_exp + exponent
+                    new_exp = snap_fraction(existing_exp + exponent)
                     if new_exp == 0:
                         combined.pop(symbol, None)
                         continue
@@ -157,20 +162,24 @@ class UnitNameSimplifier:
         if not components:
             return ""
 
-        def fmt(sym: str, exp: int) -> str:
-            if abs(exp) == 1:
+        def fmt(sym: str, exp: Fraction) -> str:
+            if exp == 1:
                 return sym
-            return f"{sym}^{abs(exp)}"
+            if exp.denominator == 1:
+                return f"{sym}^{exp.numerator}"
+            return f"{sym}^({exp.numerator}/{exp.denominator})"
 
         positives: List[str] = []
         negatives: List[str] = []
 
         for sym in sorted(components):
             exp, _ = components[sym]
+            if exp == 0:
+                continue
             if exp > 0:
                 positives.append(fmt(sym, exp))
             elif exp < 0:
-                negatives.append(fmt(sym, exp))
+                negatives.append(fmt(sym, -exp))
 
         numerator = "·".join(positives) if positives else "1"
         denominator = "·".join(negatives)
@@ -182,7 +191,7 @@ class UnitNameSimplifier:
         return numerator
 
     @staticmethod
-    def _dim_single_axis(dim: Dim) -> tuple[int, int] | None:
+    def _dim_single_axis(dim: Dim) -> tuple[int, Fraction] | None:
         axes = [idx for idx, power in enumerate(dim) if power != 0]
         if len(axes) != 1:
             return None
@@ -193,15 +202,15 @@ class UnitNameSimplifier:
         self,
         components: SymbolComponents,
         axis_idx: int,
-        target_exp: int,
+        target_exp: Fraction,
     ) -> "Unit" | None:
         from quantium.units.registry import DEFAULT_REGISTRY
 
         target_sign = 1 if target_exp > 0 else -1
-        best: tuple[str, int, "Unit"] | None = None
-        best_score = -1
-        fallback: tuple[str, int, "Unit"] | None = None
-        fallback_score = -1
+        best: tuple[str, Fraction, "Unit"] | None = None
+        best_score: Fraction = Fraction(-1, 1)
+        fallback: tuple[str, Fraction, "Unit"] | None = None
+        fallback_score: Fraction = Fraction(-1, 1)
 
         ordered_items = sorted(components.items(), key=lambda item: item[1][1])
 
@@ -265,7 +274,10 @@ class UnitNameSimplifier:
                 return None
 
             abs_exp = abs(exponent)
-            unit_part = base if abs_exp == 1 else (base ** abs_exp)
+            if abs_exp == 1:
+                unit_part = base
+            else:
+                unit_part = base ** abs_exp
             if exponent > 0:
                 numer_parts.append(unit_part)
             else:
@@ -360,14 +372,14 @@ class UnitNameSimplifier:
                 (
                     (symbol, exponent, order)
                     for symbol, (exponent, order) in components.items()
-                    if exponent
+                    if exponent != 0
                 ),
                 key=lambda item: item[2],
             )
 
             if ordered_components:
-                component_candidates: list[tuple[str, int, "Unit", tuple[int, int]]] = []
-                total_exp = 0
+                component_candidates: list[tuple[str, Fraction, "Unit", tuple[int, int]]] = []
+                total_exp = Fraction(0, 1)
                 all_same_dim = True
                 reference_dim: Dim | None = None
 
@@ -388,7 +400,7 @@ class UnitNameSimplifier:
                     total_exp += exponent
 
                 if all_same_dim and component_candidates and total_exp != 0:
-                    def _pick_key(entry: tuple[str, int, "Unit", tuple[int, int]]) -> tuple[int, int, int]:
+                    def _pick_key(entry: tuple[str, Fraction, "Unit", tuple[int, int]]) -> tuple[Fraction, int, int]:
                         _, exp, _, ordt = entry
                         return (abs(exp), -ordt[0], -ordt[1])
 

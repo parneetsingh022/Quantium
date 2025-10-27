@@ -1,8 +1,16 @@
 import math
+from fractions import Fraction
 
 import pytest
 
-from quantium.core.dimensions import DIM_0, LENGTH, TEMPERATURE, dim_div, dim_mul, dim_pow
+from quantium.core.dimensions import (
+    DIM_0,
+    LENGTH,
+    IrrationalExponentError,
+    dim_div,
+    dim_mul,
+    dim_pow,
+)
 from quantium.core.quantity import Unit
 
 def _name(sym: str, n: int) -> str:
@@ -75,3 +83,72 @@ def test_quantity_pow_negative_high_exponents_regression_issue_33(sym: str, scal
     # Magnitude in the resulting unit should be value**n
     mag_in_unit = qp._mag_si / qp.unit.scale_to_si
     assert math.isclose(mag_in_unit, value ** n, rel_tol=1e-12, abs_tol=1e-12)
+
+
+def test_quantity_pow_fraction_exponent_dimensioned():
+    m = Unit("m", 1.0, LENGTH)
+    q = 9 * m
+    exponent = Fraction(1, 2)
+
+    qp = q ** exponent
+
+    assert qp.dim == dim_pow(LENGTH, exponent)
+    assert qp.unit.name == "m^(1/2)"
+    assert math.isclose(qp.unit.scale_to_si, 1.0)
+    mag_in_unit = qp._mag_si / qp.unit.scale_to_si
+    assert math.isclose(mag_in_unit, math.sqrt(9), rel_tol=1e-12, abs_tol=1e-12)
+
+
+def test_quantity_pow_float_rationalized_dimensioned():
+    m = Unit("m", 1.0, LENGTH)
+    q = 16 * m
+    exponent = 0.5
+
+    qp = q ** exponent
+
+    assert qp.dim == dim_pow(LENGTH, Fraction(1, 2))
+    assert qp.unit.name == "m^(1/2)"
+    mag_in_unit = qp._mag_si / qp.unit.scale_to_si
+    assert math.isclose(mag_in_unit, math.sqrt(16), rel_tol=1e-12, abs_tol=1e-12)
+
+
+def test_quantity_pow_dimensionless_real_exponent():
+    one = Unit("", 1.0, DIM_0)
+    q = 3 * one
+
+    exponent = math.pi
+    qp = q ** exponent
+
+    assert qp.dim == DIM_0
+    assert qp.unit.name == ""
+    assert math.isclose(qp._mag_si / qp.unit.scale_to_si, 3 ** exponent, rel_tol=1e-12, abs_tol=1e-12)
+
+
+def test_quantity_pow_dimensionless_imaginary_exponent_error():
+    one = Unit("", 1.0, DIM_0)
+    q = 2 * one
+
+    with pytest.raises(TypeError):
+        _ = q ** complex(0, 1)
+
+
+def test_quantity_pow_dimensioned_irrational_exponent_error():
+    m = Unit("m", 1.0, LENGTH)
+    q = 2 * m
+
+    with pytest.raises(IrrationalExponentError):
+        _ = q ** math.pi
+
+
+def test_quantity_repr_fractional_power():
+    m = Unit("m", 1.0, LENGTH)
+    q = 100 * m
+    half = q ** Fraction(1, 2)
+    assert repr(half) == "10 m^(1/2)"
+
+    exp = Fraction(89, 100)
+    frac = q ** exp
+    assert repr(frac) == "60.2559586074358 m^(89/100)"
+
+
+

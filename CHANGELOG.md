@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - **Unreleased**
 
+### Added
+
+- Quantities and units now support fractional/rational exponents, including canonicalised string formatting and safety checks for irrational powers.
+
 ### Fixed
 
 - Added robust rules for multiplication/division of same-dimension units, now the symbol with the higher total power is chosen (e.g. m * cm**2 -> cm³). [#91]

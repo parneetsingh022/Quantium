@@ -11,11 +11,15 @@ from quantium.core.dimensions import (
     TEMPERATURE,
     TIME,
     Dim,
+    IrrationalExponentError,
     dim_div,
     dim_mul,
     dim_pow,
     Dimension
 )
+
+from fractions import Fraction
+import math
 
 # --- Basic structure & base vectors -------------------------------------------------
 
@@ -24,7 +28,7 @@ def test_base_vectors_shape_and_types():
     for b in bases:
         assert isinstance(b, tuple)
         assert len(b) == 7
-        assert all(isinstance(x, int) for x in b)
+        assert all(isinstance(x, Fraction) for x in b)
 
 def test_dimensional_basis():
     # Check each base unit has a single 1 in the right place and 0 elsewhere
@@ -160,6 +164,44 @@ def test_dimension_as_dict_key():
     m[d2] = "overwritten"
     assert m[d1] == "overwritten"
 
+
+def test_fractional_hash_matches_fraction_tuples():
+    fractional = (
+        Fraction(1, 2),
+        Fraction(0, 1),
+        Fraction(-3, 2),
+        Fraction(0, 1),
+        Fraction(5, 3),
+        Fraction(0, 1),
+        Fraction(0, 1),
+    )
+    d = Dimension(fractional)
+    assert d == fractional
+    assert hash(d) == hash(fractional)
+
+
+def test_fractional_dimension_as_dict_key():
+    fractional = (
+        Fraction(2, 5),
+        Fraction(0, 1),
+        Fraction(1, 3),
+        Fraction(0, 1),
+        Fraction(0, 1),
+        Fraction(-4, 7),
+        Fraction(0, 1),
+    )
+    d = Dimension(fractional)
+    store = {d.as_key(): "dimension"}
+    store[Dimension(fractional).as_key()] = "tuple"
+    assert store[d.as_key()] == "tuple"
+
+
+def test_pow_rejects_irrational_exponents():
+    d = LENGTH * (TIME ** -1)
+    with pytest.raises(IrrationalExponentError):
+        _ = d ** (2 ** 0.5)
+        _ = d ** math.pi
+
 def test_operator_mul_div_pow_equivalence():
     left = (LENGTH / TIME) * MASS
     right = dim_mul(dim_div(LENGTH, TIME), MASS)
@@ -182,10 +224,9 @@ def test_dimension_rejects_wrong_length():
     with pytest.raises(ValueError):
         Dimension((1,2,3))  # not 7
 
-def test_dimension_rejects_non_int_exponent_for_pow():
+def test_allow_non_int_exponent_for_pow():
     d = Dimension((1,0,0,0,0,0,0))
-    with pytest.raises(TypeError):
-        _ = d ** 2.5
+    _ = d ** 2.5
 
 def test_operator_algebraic_laws():
     # (ab)^n = a^n b^n
@@ -305,17 +346,17 @@ def test_operations_with_integers_fail_correctly():
     # 2. Test (Dimension * int)
     # This should fail because Dimension.__mul__ expects a DimLike object.
     # It will try to call Dimension(2), which fails because 'int' is not iterable.
-    with pytest.raises(TypeError, match="'int' object is not iterable"):
+    with pytest.raises(TypeError, match="Dimension requires an iterable"):
         _ = LENGTH * 2
 
     # 3. Test (Dimension / int)
     # This should fail because Dimension.__truediv__ expects DimLike.
-    with pytest.raises(TypeError, match="'int' object is not iterable"):
+    with pytest.raises(TypeError, match="Dimension requires an iterable"):
         _ = LENGTH / 2
 
     # 4. Test (int / Dimension)
     # This should fail because Dimension.__rtruediv__ expects DimLike.
-    with pytest.raises(TypeError, match="'int' object is not iterable"):
+    with pytest.raises(TypeError, match="Dimension requires an iterable"):
         _ = 2 / LENGTH
 
     # Sanity check: The *only* valid algebraic operation with an int is __pow__
@@ -328,15 +369,15 @@ def test_invalid_operations_fail():
         _ = 2 * LENGTH
 
     # 2. Test (Dimension * int)
-    with pytest.raises(TypeError, match="'int' object is not iterable"):
+    with pytest.raises(TypeError, match="Dimension requires an iterable"):
         _ = LENGTH * 2
 
     # 3. Test (Dimension / int)
-    with pytest.raises(TypeError, match="'int' object is not iterable"):
+    with pytest.raises(TypeError, match="Dimension requires an iterable"):
         _ = LENGTH / 2
 
     # 4. Test (int / Dimension)
-    with pytest.raises(TypeError, match="'int' object is not iterable"):
+    with pytest.raises(TypeError, match="Dimension requires an iterable"):
         _ = 2 / LENGTH
 
     # Sanity check: The *only* valid algebraic operation with an int is __pow__

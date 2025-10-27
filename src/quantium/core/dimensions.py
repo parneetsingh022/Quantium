@@ -1,14 +1,67 @@
 # quantium.core.dimensions
 
 from __future__ import annotations
-from typing import Iterable, Union, Tuple, TypeAlias, Any
+from fractions import Fraction
+from typing import Iterable, Union, Tuple, TypeAlias, Any, Iterator, overload
+
+Number = Union[int, float, Fraction]
+
+# Rationalization settings (tweak with care)
+MAX_DENOMINATOR: int = 1024
+EXP_TOL: float = 1e-12
+EPS_SNAP: float = 1e-12
+
+
+class IrrationalExponentError(ValueError):
+    """Raised when non-rational exponents are supplied for dimensioned units."""
+
+
+def snap_fraction(value: Fraction) -> Fraction:
+    """Collapse tiny residuals produced by arithmetic back to zero."""
+    if value == 0:
+        return Fraction(0, 1)
+    if abs(float(value)) < EPS_SNAP:
+        return Fraction(0, 1)
+    return value
+
+
+def rationalize_exponent(value: Number) -> Fraction:
+    """Convert a numeric exponent into an exact Fraction within tolerance."""
+
+    if isinstance(value, Fraction):
+        return Fraction(value.numerator, value.denominator)
+    if isinstance(value, int):
+        return Fraction(value, 1)
+    if isinstance(value, float):
+        if not value == value or value in (float("inf"), float("-inf")):
+            raise IrrationalExponentError("Exponents must be finite real numbers.")
+        candidate = Fraction(value).limit_denominator(MAX_DENOMINATOR)
+        if abs(value - float(candidate)) <= EXP_TOL:
+            return candidate
+        raise IrrationalExponentError(
+            "Exponent {val:.12g} cannot be represented as a rational with denominator "
+            "<= {max_den} within tolerance {tol}. Closest candidate is {num}/{den} (≈ {cand:.12g}).".format(
+                val=value,
+                max_den=MAX_DENOMINATOR,
+                tol=EXP_TOL,
+                num=candidate.numerator,
+                den=candidate.denominator,
+                cand=float(candidate),
+            )
+        )
+    raise TypeError(f"Unsupported exponent type: {type(value)!r}")
+
+
+def canonical_dim_key(dim: "Dimension") -> Tuple[Tuple[int, int, int], ...]:
+    """Tuple form used for hashing/equality: (axis, numerator, denominator)."""
+    return tuple((idx, comp.numerator, comp.denominator) for idx, comp in enumerate(dim))
 
 # --- Public typing -----------------------------------------------------------
 # Keep the old exported name "Dim" so external code doesn't change.
 # It's now an alias to our object, which is a tuple subclass (still runtime-compatible).
 Dim: TypeAlias = "Dimension"
-DimTuple = Tuple[int, int, int, int, int, int, int]
-DimLike = Union["Dimension", DimTuple, Iterable[int]]
+DimTuple = Tuple[Fraction, Fraction, Fraction, Fraction, Fraction, Fraction, Fraction]
+DimLike = Union["Dimension", DimTuple, Iterable[Number]]
 
 # --- Core object -------------------------------------------------------------
 
@@ -23,27 +76,36 @@ class Dimension(tuple):
 
     def __new__(cls, data: DimLike = (0, 0, 0, 0, 0, 0, 0)) -> "Dimension":
         if isinstance(data, Dimension):
-            return tuple.__new__(cls, data)
+            comps = tuple(snap_fraction(Fraction(v.numerator, v.denominator)) for v in data)
+        else:
+            try:
+                iterator: Iterator[Number] = iter(data)
+            except TypeError as exc:  # pragma: no cover - defensive branch
+                raise TypeError("Dimension requires an iterable of exponents") from exc
 
-        # allow any iterable of ints
-        t = tuple(int(x) for x in data)
-        if len(t) != 7:
+            comps = tuple(snap_fraction(rationalize_exponent(x)) for x in iterator)
+
+        if len(comps) != 7:
             raise ValueError("Dimension must have length 7 (L, M, T, I, Θ, N, J).")
-        return tuple.__new__(cls, t)
+        return tuple.__new__(cls, comps)
 
     # --- Algebra (operator overloads) ---
-    def __mul__(self, other: DimLike) -> "Dimension": # type: ignore[override]
+    def __mul__(self, other: DimLike) -> "Dimension":  # type: ignore[override]
         o = Dimension(other)
-        return Dimension(x + y for x, y in zip(self, o, strict=True))
+        return Dimension(snap_fraction(x + y) for x, y in zip(self, o, strict=True))
 
     def __truediv__(self, other: DimLike) -> "Dimension":
         o = Dimension(other)
-        return Dimension(x - y for x, y in zip(self, o, strict=True))
+        return Dimension(snap_fraction(x - y) for x, y in zip(self, o, strict=True))
 
-    def __pow__(self, n: int) -> "Dimension":
-        if not isinstance(n, int):
-            raise TypeError("Exponent must be an int.")
-        return Dimension(x * n for x in self)
+    def __pow__(self, n: Number) -> "Dimension":
+        if self.is_dimensionless:
+            if not isinstance(n, (int, float, Fraction)):
+                raise TypeError("Exponent must be numeric.")
+            return Dimension(self)
+
+        exponent = rationalize_exponent(n)
+        return Dimension(snap_fraction(x * exponent) for x in self)
     
     def __rtruediv__(self, other: DimLike) -> "Dimension":
         """Handles (tuple / Dimension) by calculating (other / self)."""
@@ -68,6 +130,20 @@ class Dimension(tuple):
         """Block tuple concatenation (e.g., (1,2) + MASS)."""
         return NotImplemented
 
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, Dimension):
+            return canonical_dim_key(self) == canonical_dim_key(other)
+        try:
+            other_dim = Dimension(other)
+        except Exception:
+            return False
+        return canonical_dim_key(self) == canonical_dim_key(other_dim)
+
+    def __hash__(self) -> int:
+        # Delegate to tuple hashing so values remain hash-compatible with tuples
+        # containing the same Fraction entries (preserving legacy behaviour).
+        return tuple.__hash__(self)
+
     # --- Helpers ---
     @property
     def is_dimensionless(self) -> bool:
@@ -77,6 +153,10 @@ class Dimension(tuple):
         # explicit narrow type for external APIs
         return tuple(self)
 
+    def as_key(self) -> Tuple[Tuple[int, int, int], ...]:
+        """Return a stable, canonical key for hashing or dict/set usage."""
+        return canonical_dim_key(self)
+
     def __repr__(self) -> str:
         # readable, but still unambiguous
         names = ("L", "M", "T", "I", "Θ", "N", "J")
@@ -85,20 +165,25 @@ class Dimension(tuple):
         parts = ""
         for n, v in zip(names, self, strict=True):
             if v != 0:
-                parts += f"[{n}^{v}]"
+                parts += f"[{n}^{v.numerator}/{v.denominator}]" if v.denominator != 1 else f"[{n}^{v.numerator}]"
 
         return parts
 
+
 # --- Legacy function shims (keep working code alive) ------------------------
+
 
 def dim_mul(a: DimLike, b: DimLike) -> Dimension:
     return Dimension(a) * b
 
+
 def dim_div(a: DimLike, b: DimLike) -> Dimension:
     return Dimension(a) / b
 
-def dim_pow(a: DimLike, n: int) -> Dimension:
+
+def dim_pow(a: DimLike, n: Number) -> Dimension:
     return Dimension(a) ** n
+
 
 # --- Public constants (identical names, now Dimension instances) ------------
 

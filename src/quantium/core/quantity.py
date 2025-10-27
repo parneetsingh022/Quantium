@@ -23,14 +23,22 @@ The system supports:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from math import isclose, isfinite
 from typing import Union
 
-from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
+from quantium.core.dimensions import (
+    DIM_0,
+    Dim,
+    dim_div,
+    dim_mul,
+    dim_pow,
+    rationalize_exponent,
+)
 from quantium.core.unit_simplifier import SymbolComponents, UnitNameSimplifier
 from quantium.units.parser import extract_unit_expr
 
-Number = Union[int, float]
+Number = Union[int, float, Fraction]
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,14 +90,14 @@ class Unit:
         new_dim = dim_mul(self.dim, other.dim)
         new_scale = self.scale_to_si * other.scale_to_si
 
-        # If the two units are equivalent (same dim and scale), collapse to a power.
-        # This avoids "K·kelvin" and produces "kelvin^2" (or "K^2" if the LHS was "K").
+    # If the two units are equivalent (same dim and scale), collapse to a power.
+    # This avoids "K·kelvin" and produces "kelvin**2" (or "K**2" if the LHS was "K").
         if (
             self.dim == other.dim
             and isclose(self.scale_to_si, other.scale_to_si, rel_tol=1e-12, abs_tol=0.0)
         ):
             base_name = self.name if self.name else other.name
-            new_unit_name = UNIT_SIMPLIFIER.normalize_power_name(f"{base_name}^2")
+            new_unit_name = UNIT_SIMPLIFIER.normalize_power_name(f"{base_name}**2")
             return Unit(new_unit_name, new_scale, new_dim)
 
         components = UNIT_SIMPLIFIER.combine_symbol_maps(
@@ -156,18 +164,23 @@ class Unit:
         return Unit(new_name, new_scale, new_dim)
         
 
-    def __pow__(self, n: int) -> Unit:
-        new_dim = dim_pow(self.dim, n)
-        # Canonical naming:
-        if n == 0:
-            normalized_name = ""
-        else:
-            components = UNIT_SIMPLIFIER.scale_symbol_map(UNIT_SIMPLIFIER.unit_symbol_map(self, 0), n)
-            normalized_name = UNIT_SIMPLIFIER.format_unit_components(components)
-            if not normalized_name:
-                normalized_name = ""
+    def __pow__(self, n: Number) -> Unit:
+        # Dimensionless units retain prior permissive behaviour.
+        if self.dim == DIM_0:
+            exponent_float = float(n)
+            new_scale = self.scale_to_si ** exponent_float
+            new_dim = dim_pow(self.dim, n)
+            return Unit(self.name, new_scale, new_dim)
 
-        new_scale = self.scale_to_si ** n
+        exponent = rationalize_exponent(n)
+        new_dim = dim_pow(self.dim, exponent)
+
+        components = UNIT_SIMPLIFIER.scale_symbol_map(UNIT_SIMPLIFIER.unit_symbol_map(self, 0), exponent)
+        normalized_name = UNIT_SIMPLIFIER.format_unit_components(components)
+        if not normalized_name:
+            normalized_name = ""
+
+        new_scale = self.scale_to_si ** float(exponent)
         return Unit(normalized_name, new_scale, new_dim)
 
 
@@ -398,7 +411,7 @@ class Quantity:
     
     def __mul__(self, other: "Quantity | Unit | Number") -> "Quantity":
         # scalar × quantity
-        if isinstance(other, (int, float)):
+        if isinstance(other, (int, float, Fraction)):
             return Quantity((self._mag_si * float(other)) / self.unit.scale_to_si, self.unit)
 
         # quantity × unit
@@ -412,6 +425,9 @@ class Quantity:
             value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
             return Quantity(value, unit)
         
+        if not isinstance(other, Quantity):
+            raise TypeError("Multiplication requires Quantity, Unit, or numeric scalar")
+
         # quantity × quantity
         result_mag_si = self._mag_si * other._mag_si
         result_dim = dim_mul(self.dim, other.dim)
@@ -422,13 +438,13 @@ class Quantity:
         value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
         return Quantity(value, unit)
 
-    def __rmul__(self, other: float | int) -> "Quantity":
+    def __rmul__(self, other: float | int | Fraction) -> "Quantity":
         # allows 3 * (2 m) -> 6 m
         return self.__mul__(other)
 
     def __truediv__(self, other: "Quantity | Unit | Number") -> "Quantity":
         # quantity / scalar
-        if isinstance(other, (int, float)):
+        if isinstance(other, (int, float, Fraction)):
             return Quantity((self._mag_si / float(other)) / self.unit.scale_to_si, self.unit)
         
         # quantity / unit
@@ -442,6 +458,9 @@ class Quantity:
             value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
             return Quantity(value, unit)
 
+        if not isinstance(other, Quantity):
+            raise TypeError("Division requires Quantity, Unit, or numeric scalar")
+
         # quantity / quantity
         result_mag_si = self._mag_si / other._mag_si
         result_dim = dim_div(self.dim, other.dim)
@@ -452,9 +471,9 @@ class Quantity:
         value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
         return Quantity(value, unit)
 
-    def __rtruediv__(self, other: float | int) -> "Quantity":
+    def __rtruediv__(self, other: float | int | Fraction) -> "Quantity":
         # scalar / quantity  -> returns Quantity with inverse dimension
-        if not isinstance(other, (int, float)):
+        if not isinstance(other, (int, float, Fraction)):
             return NotImplemented
         result_dim = dim_div(DIM_0, self.dim)
         result_mag_si = float(other) / self._mag_si
@@ -462,7 +481,7 @@ class Quantity:
         value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
         return Quantity(value, unit)
 
-    def __pow__(self, n: int) -> "Quantity":
+    def __pow__(self, n: Number) -> "Quantity":
         new_unit = self.unit ** n
         return Quantity((self._mag_si ** n) / new_unit.scale_to_si, new_unit)
     
