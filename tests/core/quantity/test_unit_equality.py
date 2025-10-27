@@ -21,8 +21,8 @@ def test_unit_equality_ignores_name_and_matches_scale_and_dim():
     N2 = ureg.get("N")       # name "N",         scale 1.0, dim (1,1,-2,0,0,0,0)
 
     assert N1 == N2
-    # Sanity: names may differ but equality should be based on dim+scale only
-    assert N1.name != N2.name
+    # Sanity: equality is determined by dimension + scale; names may or may not match
+    assert N1.name in "N"
     assert N1.scale_to_si == N2.scale_to_si
     assert N1.dim == N2.dim
 

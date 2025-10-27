@@ -24,33 +24,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isclose, isfinite
-import math
-import re
-
-from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
-from quantium.units.parser import extract_unit_expr
 from typing import Union
 
-Number = Union[int, float]
-_POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
+from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
+from quantium.core.unit_simplifier import SymbolComponents, UnitNameSimplifier
+from quantium.units.parser import extract_unit_expr
 
-def _normalize_power_name(name: str) -> str:
-    """
-    Make names canonical:
-    - 'x^1'  -> 'x'
-    - 'x^0'  -> '1'   (dimensionless label; adjust if you prefer something else)
-    - 'x^-1' stays 'x^-1'
-    """
-    m = _POWER_RE.match(name)
-    if not m:
-        return name
-    base = m.group("base")
-    exp = int(m.group("exp"))
-    if exp == 1:
-        return base
-    if exp == 0:
-        return "1"
-    return f"{base}^{exp}"
+Number = Union[int, float]
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +70,13 @@ class Unit:
         )
         
     def __rmul__(self, value: float) -> Quantity:
-        return Quantity(float(value), self)
+        scalar = float(value)
+        if scalar == 0.0:
+            mag_si = 0.0  # keep exact zero to avoid floating noise
+            components = UNIT_SIMPLIFIER.unit_symbol_map(self)
+            val, unit = UNIT_SIMPLIFIER.si_to_value_unit(mag_si, self.dim, components)
+            return Quantity(val, unit)
+        return Quantity(scalar, self)
     
     def __mul__(self, other: "Unit") -> "Unit":
         new_dim = dim_mul(self.dim, other.dim)
@@ -103,11 +89,28 @@ class Unit:
             and isclose(self.scale_to_si, other.scale_to_si, rel_tol=1e-12, abs_tol=0.0)
         ):
             base_name = self.name if self.name else other.name
-            new_unit_name = _normalize_power_name(f"{base_name}^2")
+            new_unit_name = UNIT_SIMPLIFIER.normalize_power_name(f"{base_name}^2")
             return Unit(new_unit_name, new_scale, new_dim)
 
-        # Otherwise compose normally.
-        new_unit_name = f"{self.name}·{other.name}"
+        components = UNIT_SIMPLIFIER.combine_symbol_maps(
+            UNIT_SIMPLIFIER.unit_symbol_map(self, 0),
+            UNIT_SIMPLIFIER.unit_symbol_map(other, 1),
+        )
+
+        if (
+            new_dim != DIM_0
+            and isclose(new_scale, 1.0, rel_tol=1e-12, abs_tol=0.0)
+            and "1" not in components
+        ):
+            from quantium.core.utils import preferred_symbol_for_dim
+
+            preferred = preferred_symbol_for_dim(new_dim)
+            if preferred:
+                return Unit(preferred, 1.0, new_dim)
+
+        new_unit_name = UNIT_SIMPLIFIER.format_unit_components(components)
+        if new_dim == DIM_0:
+            new_unit_name = ""
         return Unit(new_unit_name, new_scale, new_dim)
 
 
@@ -115,13 +118,25 @@ class Unit:
         new_dim = dim_div(self.dim, other.dim)
         new_scale = self.scale_to_si / other.scale_to_si
 
-        # Parenthesize denominator if it's compound to avoid flattening like "W·s/N·s/m^2"
-        def _needs_paren(name: str) -> bool:
-            # name contains any operator that would change precedence if ungrouped
-            return any(op in name for op in ("·", "*", "/")) and not (name.startswith("(") and name.endswith(")"))
+        components = UNIT_SIMPLIFIER.combine_symbol_maps(
+            UNIT_SIMPLIFIER.unit_symbol_map(self, 0),
+            UNIT_SIMPLIFIER.scale_symbol_map(UNIT_SIMPLIFIER.unit_symbol_map(other, 1), -1),
+        )
 
-        right = f"({other.name})" if _needs_paren(other.name) else other.name
-        new_unit_name = f"{self.name}/{right}"
+        if (
+            new_dim != DIM_0
+            and isclose(new_scale, 1.0, rel_tol=1e-12, abs_tol=0.0)
+            and "1" not in components
+        ):
+            from quantium.core.utils import preferred_symbol_for_dim
+
+            preferred = preferred_symbol_for_dim(new_dim)
+            if preferred:
+                return Unit(preferred, 1.0, new_dim)
+
+        new_unit_name = UNIT_SIMPLIFIER.format_unit_components(components)
+        if new_dim == DIM_0:
+            new_unit_name = ""
 
         return Unit(new_unit_name, new_scale, new_dim)
     
@@ -133,39 +148,30 @@ class Unit:
             )
 
         new_dim = dim_div(DIM_0, self.dim)
-        name = self.name
-
-        if name.startswith("1/"):
-            # 1/(1/x) -> x
-            name = name[2:]
-        else:
-            m = _POWER_RE.match(name)
-            if m:
-                base = m.group("base")
-                k = int(m.group("exp"))
-                name = f"{base}^{-k}"    # 1/(s^-3) -> s^3, 1/(s^3) -> s^-3
-            else:
-                name = f"{name}^-1"      # 1/s -> s^-1   (key change)
-        
-        normalized_name = _normalize_power_name(name)
+        components = UNIT_SIMPLIFIER.scale_symbol_map(UNIT_SIMPLIFIER.unit_symbol_map(self, 0), -1)
         new_scale = 1 / self.scale_to_si
-        return Unit(normalized_name, new_scale, new_dim)
+        new_name = UNIT_SIMPLIFIER.format_unit_components(components)
+        if new_dim == DIM_0:
+            new_name = ""
+        return Unit(new_name, new_scale, new_dim)
         
 
     def __pow__(self, n: int) -> Unit:
         new_dim = dim_pow(self.dim, n)
         # Canonical naming:
         if n == 0:
-            new_unit_name = f"{self.name}^0"  # or maybe a specific "dimensionless" name if you prefer
-        elif n == 1:
-            new_unit_name = self.name
+            normalized_name = ""
         else:
-            new_unit_name = f"{self.name}^{n}"   # handles negatives like s^-3
-
-        normalized_name = _normalize_power_name(new_unit_name)
+            components = UNIT_SIMPLIFIER.scale_symbol_map(UNIT_SIMPLIFIER.unit_symbol_map(self, 0), n)
+            normalized_name = UNIT_SIMPLIFIER.format_unit_components(components)
+            if not normalized_name:
+                normalized_name = ""
 
         new_scale = self.scale_to_si ** n
         return Unit(normalized_name, new_scale, new_dim)
+
+
+UNIT_SIMPLIFIER = UnitNameSimplifier(Unit)
 
 
 class Quantity:
@@ -189,6 +195,9 @@ class Quantity:
         self._mag_si = float(value) * unit.scale_to_si
         self.dim = unit.dim
         self.unit = unit
+
+    def _symbol_component_map(self, priority: int) -> SymbolComponents:
+        return UNIT_SIMPLIFIER.unit_symbol_map(self.unit, priority)
         
     def _check_dim_compatible(self, other: object) -> None:
         """Internal helper to raise TypeError on dimension mismatch."""
@@ -197,7 +206,7 @@ class Quantity:
             if isinstance(other, (int, float)) and other == 0:
                 if self.dim != DIM_0:
                     raise TypeError("Cannot compare a dimensioned quantity to 0")
-                return # It's a 0 dimensionless quantity, OK
+                return  # It's a 0 dimensionless quantity, OK
             raise TypeError(f"Cannot compare Quantity with type {type(other)}")
 
         if self.dim != other.dim:
@@ -318,8 +327,15 @@ class Quantity:
         # The dim check has already passed at this point.
         if new_unit.name == self.unit.name:
             return self
-        
-        return Quantity(self._mag_si / new_unit.scale_to_si, new_unit)
+
+        components = UNIT_SIMPLIFIER.unit_symbol_map(new_unit)
+        value, unit = UNIT_SIMPLIFIER.si_to_value_unit(
+            self._mag_si,
+            self.dim,
+            components,
+            new_unit,
+        )
+        return Quantity(value, unit)
         
     
     def to_si(self) -> Quantity:
@@ -387,20 +403,24 @@ class Quantity:
 
         # quantity × unit
         if isinstance(other, Unit):
-            new_unit = self.unit * other
-
-            if new_unit.dim == DIM_0:
-                # Result is dimensionless. Calculate the new SI mag and use a scale=1 unit.
-                new_mag_si = self._mag_si * other.scale_to_si
-                unit_dimless = Unit('', 1.0, DIM_0)
-                return Quantity(new_mag_si, unit_dimless) # Pass SI mag as value
-
-            return Quantity(self.value, new_unit)
+            result_mag_si = self._mag_si * other.scale_to_si
+            result_dim = dim_mul(self.dim, other.dim)
+            components = UNIT_SIMPLIFIER.combine_symbol_maps(
+                self._symbol_component_map(0),
+                UNIT_SIMPLIFIER.unit_symbol_map(other, 1),
+            )
+            value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
+            return Quantity(value, unit)
         
         # quantity × quantity
-        new_unit = self.unit * other.unit
-        # convert SI magnitude back to the composed unit
-        return Quantity((self._mag_si * other._mag_si) / new_unit.scale_to_si, new_unit)
+        result_mag_si = self._mag_si * other._mag_si
+        result_dim = dim_mul(self.dim, other.dim)
+        components = UNIT_SIMPLIFIER.combine_symbol_maps(
+            self._symbol_component_map(0),
+            other._symbol_component_map(1),
+        )
+        value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
+        return Quantity(value, unit)
 
     def __rmul__(self, other: float | int) -> "Quantity":
         # allows 3 * (2 m) -> 6 m
@@ -413,33 +433,34 @@ class Quantity:
         
         # quantity / unit
         if isinstance(other, Unit):
-            new_unit = self.unit / other
-            if new_unit.dim == DIM_0:
-                # Result is dimensionless. Calculate the new SI mag and use a scale=1 unit.
-                new_mag_si = self._mag_si / other.scale_to_si
-                unit_dimless = Unit('', 1.0, DIM_0)
-                return Quantity(new_mag_si, unit_dimless) # Pass SI mag as value
-            
-            return Quantity(self.value, new_unit)
+            result_mag_si = self._mag_si / other.scale_to_si
+            result_dim = dim_div(self.dim, other.dim)
+            components = UNIT_SIMPLIFIER.combine_symbol_maps(
+                self._symbol_component_map(0),
+                UNIT_SIMPLIFIER.scale_symbol_map(UNIT_SIMPLIFIER.unit_symbol_map(other, 1), -1),
+            )
+            value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
+            return Quantity(value, unit)
 
         # quantity / quantity
-        new_unit = self.unit / other.unit
-        if new_unit.dim == DIM_0:
-            # dimensionless quantity has no name
-            new_unit = Unit('', 1.0, DIM_0)
-
-        return Quantity((self._mag_si / other._mag_si) / new_unit.scale_to_si, new_unit)
+        result_mag_si = self._mag_si / other._mag_si
+        result_dim = dim_div(self.dim, other.dim)
+        components = UNIT_SIMPLIFIER.combine_symbol_maps(
+            self._symbol_component_map(0),
+            UNIT_SIMPLIFIER.scale_symbol_map(other._symbol_component_map(1), -1),
+        )
+        value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
+        return Quantity(value, unit)
 
     def __rtruediv__(self, other: float | int) -> "Quantity":
         # scalar / quantity  -> returns Quantity with inverse dimension
         if not isinstance(other, (int, float)):
             return NotImplemented
-        
-        new_dim = dim_div(DIM_0, self.dim)  # or dim_pow(self.dim, -1)
-        new_unit_name = f"{1}/{self.unit.name}"
-        new_scale = 1.0 / self.unit.scale_to_si
-        new_unit = Unit(new_unit_name, new_scale, new_dim)
-        return Quantity((float(other) / self._mag_si) / new_unit.scale_to_si, new_unit)
+        result_dim = dim_div(DIM_0, self.dim)
+        result_mag_si = float(other) / self._mag_si
+        components = UNIT_SIMPLIFIER.scale_symbol_map(self._symbol_component_map(0), -1)
+        value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
+        return Quantity(value, unit)
 
     def __pow__(self, n: int) -> "Quantity":
         new_unit = self.unit ** n
@@ -471,57 +492,10 @@ class Quantity:
         is_composed = any(ch in pretty for ch in ("/", "·", "^"))
 
         if is_composed:
-            sym = preferred_symbol_for_dim(self.dim)  # e.g., "N", "A", "W", "Pa", ...
-            if sym:
-                # --- FIX: Check for zero *before* any scale/prefix logic ---
-                if self._mag_si == 0.0:
-                    mag = 0.0
-                    pretty = sym  # Show '0 N', '0 Pa', etc.
-                else:
-                    # --- All other logic is now nested in this 'else' ---
-                    scale = self.unit.scale_to_si
-
-                    # 1. Check for exact SI scale (e.g., N/m²)
-                    if abs(scale - 1.0) <= 1e-12:
-                        pretty = sym
-                        mag = self._mag_si  # Use base SI magnitude
-                    else:
-                        # 2. Check for an exact SI prefix match (e.g., kg·m/ms²)
-                        found_prefix = False
-                        for p in PREFIXES:
-                            if abs(scale - p.factor) <= 1e-12:
-                                pretty = f"{p.symbol}{sym}"
-                                mag = self._mag_si / p.factor  # Use rescaled magnitude
-                                found_prefix = True
-                                break
-
-                        # 3. NEW LOGIC: If no exact match, *now* use engineering notation
-                        #    This handles the N/cm² case (scale 10^4).
-                        if not found_prefix:
-                            mag_si = self._mag_si
-                            
-                            # Find the exponent in base 10
-                            exponent = log10(abs(mag_si))
-                            # Find the nearest SI prefix exponent (multiple of 3)
-                            prefix_exp = int(floor(exponent / 3) * 3)
-
-                            prefix_symbol = ""
-                            prefix_factor = 1.0
-
-                            if prefix_exp == 0:
-                                prefix_factor = 1.0
-                                prefix_symbol = ""
-                            else:
-                                for p in PREFIXES:
-                                    if abs(p.factor - (10**prefix_exp)) <= 1e-12:
-                                        prefix_symbol = p.symbol
-                                        prefix_factor = p.factor
-                                        break
-                            
-                            # Calculate the new magnitude
-                            mag = mag_si / prefix_factor
-                            # Create the new pretty name
-                            pretty = f"{prefix_symbol}{sym}"
+            # Respect the stored composed unit name for representation.
+            # We deliberately avoid performing an additional canonicalisation
+            # here so that `Quantity.unit.name` matches the printed output.
+            return f"{mag:.15g}" if pretty == "1" else f"{mag:.15g} {pretty}"
 
         # If the pretty name reduces to "1", show just the number
         # This also handles all non-composed units that skipped the `if` block.
@@ -564,12 +538,3 @@ class Quantity:
         if spec == "si":
             return repr(self.to_si())  # force SI
         raise ValueError("Unknown format spec; use '', 'native', or 'si'")
-
-
-
-
-        
-
-        
-
-    

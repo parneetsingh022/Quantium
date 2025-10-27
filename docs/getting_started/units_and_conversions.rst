@@ -82,7 +82,7 @@ Output:
 .. code-block::
 
     Value: 6.0
-    Units: Unit(name='kg·m/s^2', scale_to_si=1.0, dim=[L^1][M^1][T^-2])
+    Units: Unit(name='N', scale_to_si=1.0, dim=[L^1][M^1][T^-2])
     Dimension: [L^1][M^1][T^-2]
     6.0 N
 

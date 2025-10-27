@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from quantium.core.dimensions import DIM_0, TIME, LENGTH, TEMPERATURE, dim_div, dim_mul
+from quantium.core.dimensions import DIM_0, TIME, LENGTH, dim_div, dim_mul
 from quantium.core.quantity import Unit, Quantity
 from quantium import u
 
@@ -26,7 +26,7 @@ def test_add_and_sub_same_dim():
 
 def test_add_dim_mismatch_raises():
     m = Unit("m", 1.0, LENGTH)
-    s = Unit("s", 1.0, TEMPERATURE)
+    s = Unit("s", 1.0, TIME)
     with pytest.raises(TypeError):
         _ = (1 * m) + (1 * s)
 
@@ -45,19 +45,19 @@ def test_scalar_multiplication_and_division():
 
 def test_quantity_times_quantity():
     m = Unit("m", 1.0, LENGTH)
-    s = Unit("s", 1.0, TEMPERATURE)
+    s = Unit("s", 1.0, TIME)
     q = (2 * m) * (3 * s)  # -> 6 m·s
 
-    assert q.dim == dim_mul(LENGTH, TEMPERATURE)
+    assert q.dim == dim_mul(LENGTH, TIME)
     assert q.unit.name == "m·s"
     assert math.isclose(q._mag_si / q.unit.scale_to_si, 6.0)
 
 def test_quantity_div_quantity():
     m = Unit("m", 1.0, LENGTH)
-    s = Unit("s", 1.0, TEMPERATURE)
+    s = Unit("s", 1.0, TIME)
     q = (10 * m) / (2 * s)  # -> 5 m/s
 
-    assert q.dim == dim_div(LENGTH, TEMPERATURE)
+    assert q.dim == dim_div(LENGTH, TIME)
     assert q.unit.name == "m/s"
     assert math.isclose(q._mag_si / q.unit.scale_to_si, 5.0)
 
@@ -83,9 +83,8 @@ def test_quantity_times_unit_basic():
 
     assert isinstance(q, Quantity)
     assert q.dim == dim_mul(LENGTH, TIME)
-    assert q.unit.name in ("m·s", "s·m")  # order may depend on your Unit.__mul__
-    # magnitude shown in the current (composed) unit:
-    assert math.isclose(q._mag_si / q.unit.scale_to_si, 2.0)
+    assert q.unit.name == "m·s"
+    assert math.isclose(q.value, 2.0)
 
 
 def test_quantity_times_unit_with_prefix_does_not_change_numeric_value():
@@ -93,14 +92,16 @@ def test_quantity_times_unit_with_prefix_does_not_change_numeric_value():
     m = Unit("m", 1.0, LENGTH)
 
     q_cm = 300 * cm   # SI = 3.0 m
-    out = q_cm * m    # new_unit scale = 0.01, constructor multiplies again
+    q_m  = 200 * m
+    out = q_cm * m    # retains prefixed symbol composition
+    out2 = q_m * q_cm
 
     assert out.dim == dim_mul(LENGTH, LENGTH)
-    # Displayed magnitude should still be 3.0 in the composed unit
-    # because shown_value = out._mag_si / out.unit.scale_to_si = (3.0*0.01)/0.01 = 3.0
-    assert math.isclose(out._mag_si / out.unit.scale_to_si, 300.0)
-    # Name depends on your Unit.__mul__ formatting:
-    assert out.unit.name in ("cm·m", "m·cm")
+    assert out.unit.name == "cm^2"
+    assert out2.dim == dim_mul(LENGTH, LENGTH)
+    assert out2.unit.name == "m^2"
+    assert math.isclose(out.value, 30000)
+    assert math.isclose(out2.value, 600)
 
 
 
@@ -128,36 +129,32 @@ def test_quantity_div_unit_basic():
 
     assert isinstance(q, Quantity)
     assert q.dim == dim_div(LENGTH, TIME)
-    assert q.unit.name in ("m/s", "m·s^-1")  # accept either normalized style
-    assert math.isclose(q._mag_si / q.unit.scale_to_si, 10.0)
+    assert q.unit.name == "m/s"
+    assert math.isclose(q.value, 10.0)
 
 
 def test_quantity_div_unit_dimensionless_normalization():
-    """With current impl, quantity / unit yields DIM_0 but keeps a composed name (e.g., 'm/m')."""
+    """Division by a matching unit collapses to a truly dimensionless result."""
     m = Unit("m", 1.0, LENGTH)
 
-    q = (7 * m) / m   # DIM_0, but name not normalized in this code path
+    q = (7 * m) / m
 
     assert q.dim == DIM_0
-    # Current behavior: not normalized to empty name for quantity ÷ unit
-    assert q.unit.name in ("", "m/m")
-    # Scale of 'm/m' is 1, so displayed value is 7 either way
-    assert math.isclose(q._mag_si / q.unit.scale_to_si, 7.0)
+    assert q.unit.name == ""
+    assert math.isclose(q.value, 7.0)
 
 
 
 def test_quantity_div_unit_with_prefix_dimensionless_value_is_correct():
-    """Even if name is 'cm/m', the displayed value should be the correct pure number."""
+    """Prefixed ratios still collapse to a pure, unitless number."""
     cm = Unit("cm", 0.01, LENGTH)
     m = Unit("m", 1.0, LENGTH)
 
     q = (200 * cm) / m  # 200 cm / 1 m -> 2 (dimensionless)
 
     assert q.dim == DIM_0
-    # Current behavior keeps 'cm/m' (scale 0.01) rather than empty name
-    assert q.unit.name in ("", "cm/m")
-    # Regardless of name normalization, shown value must be 2.0
-    assert math.isclose(q._mag_si / q.unit.scale_to_si, 2.0)
+    assert q.unit.name == ""
+    assert math.isclose(q.value, 2.0)
 
 
 
@@ -171,6 +168,40 @@ def test_quantity_div_unit_does_not_mutate_original():
     # original unchanged
     assert q.unit is m
     assert math.isclose(q._mag_si, 12.0)
+
+
+def test_length_only_simplifies_and_allows_custom_conversion():
+    q = (4 * (u.m ** 2)) / (4 * (u.cm ** 3))
+
+    assert q.unit.name == "1/cm"
+    assert math.isclose(q.value, 10_000.0)
+
+    converted = q.to("cm**2/m**3")
+    assert converted.unit.name == "1/m"
+    assert math.isclose(converted.value, 1000000.0)
+
+
+def test_force_substitution_uses_newton_with_prefix_conversion():
+    q = (1 * u.kg) * u.mm / (u.s ** 2)
+
+    assert q.unit.name == "mN"
+    assert q.value == 1
+    assert math.isclose(q.value, 1.0, rel_tol=1e-12)
+
+
+def test_force_substitution_handles_submicron_inputs():
+    q = (1 * u.mg) * u.um / (u.s ** 2)
+
+    assert q.unit.name == "pN"
+    assert q.value, 1e-12 == 1
+    assert math.isclose(q.value, 1.0, rel_tol=1e-12)
+
+
+def test_force_substitution_detects_large_prefix():
+    q = (1 * u.kg) * u.m / (u.ns ** 2)
+
+    assert q.unit.name == "GN"
+    assert math.isclose(q.value, 1_000_000_000)
 
 # --- Tests for Issue #67 ---
 
@@ -187,13 +218,6 @@ def test_regression_67_scalar_times_unit_div_unit_precedence():
     # This is evaluated as (1000 * cm) / s
     q = 1000 * cm / s
 
-    # q1 = 1000 * cm -> (value=1000, _mag_si=10.0)
-    # q_new = q1 / s
-    # Fixed code uses q1.value (1000.0)
-    # q_new = Quantity(1000.0, cm/s)
-    #   q_new._mag_si = 1000.0 * 0.01 = 10.0
-    #   q_new.value = 10.0 / 0.01 = 1000.0
-
     assert isinstance(q, Quantity)
     assert q.unit.name == "cm/s"
     assert math.isclose(q._mag_si, 10.0)
@@ -209,16 +233,11 @@ def test_regression_67_quantity_times_unit_uses_value():
     m =  u("m")   # scale 1.0
 
     q1 = 1000 * cm  # (value=1000, _mag_si=10.0)
-    q2 = q1 * m     # Should be 1000 cm·m
+    q2 = q1 * m     # retains composed unit name with prefix
 
-    # Fixed code: Quantity(q1.value, cm·m) -> Quantity(1000.0, cm·m)
-    #   q2.unit = cm·m (scale 0.01)
-    #   q2._mag_si = 1000.0 * 0.01 = 10.0
-    #   q2.value = 10.0 / 0.01 = 1000.0
-    
-    assert q2.unit.name == "cm·m"
+    assert q2.unit.name == "cm^2"
     assert math.isclose(q2._mag_si, 10.0)
-    assert math.isclose(q2.value, 1000.0)
+    assert math.isclose(q2.value, 100000.0)
 
 
 @pytest.mark.regression(reason="Issue #67: Fix for Quantity / Unit constructor")
@@ -230,13 +249,8 @@ def test_regression_67_quantity_div_unit_uses_value():
     s =  u("s")   # scale 1.0
 
     q1 = 1000 * cm  # (value=1000, _mag_si=10.0)
-    q2 = q1 / s     # Should be 1000 cm/s
+    q2 = q1 / s
 
-    # Fixed code: Quantity(q1.value, cm/s) -> Quantity(1000.0, cm/s)
-    #   q2.unit = cm/s (scale 0.01)
-    #   q2._mag_si = 1000.0 * 0.01 = 10.0
-    #   q2.value = 10.0 / 0.01 = 1000.0
-    
     assert q2.unit.name == "cm/s"
     assert math.isclose(q2._mag_si, 10.0)
     assert math.isclose(q2.value, 1000.0)

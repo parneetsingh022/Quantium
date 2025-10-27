@@ -74,9 +74,8 @@ def test_unit_div_equivalent_is_dimensionless_even_if_name_not_normalized():
 
     # Current Unit.__truediv__ may leave a composed name (e.g., "K/kelvin").
     # Accept either normalized or raw composed names.
-    acceptable = {"", "1", "K/kelvin", "kelvin/K"}
-    assert out1.name in acceptable
-    assert out2.name in acceptable
+    assert out1.name in ""
+    assert out2.name in ""
 
 
 def test_unit_div_non_equivalent_builds_fraction_name_and_scale():
@@ -89,7 +88,7 @@ def test_unit_div_non_equivalent_builds_fraction_name_and_scale():
     assert out.dim == DIM_0  # same dimension -> cancels
     assert math.isclose(out.scale_to_si, 0.01)  # 0.01 / 1
     # Name depends on implementation; accept either direction
-    assert out.name in ("cm/m", "m^-1·cm") or "/" in out.name or "^-1" in out.name
+    assert out.name == ""
 
 
 # -------------------------------
@@ -118,10 +117,10 @@ def test_unit_pow_name_normalization_and_scale():
     assert math.isclose(s_1.scale_to_si, 1.0)
 
     # names (using ^, not unicode superscript, per implementation)
-    assert s0.name in ("1", "s^0")
+    assert s0.name in ("", "1", "s^0")
     assert s1.name == "s"
     assert s2.name == "s^2"
-    assert s_1.name == "s^-1"
+    assert s_1.name == "1/s"
 
 
 
@@ -141,7 +140,7 @@ def test_unit_reciprocal_with_rtruediv_normalizes_power():
 
     # (1 / s) = s^-1
     assert one_over_s.dim == dim_pow(TIME, -1) == dim_div(DIM_0, TIME)
-    assert one_over_s.name == "s^-1"
+    assert one_over_s.name == "1/s"
     assert math.isclose(one_over_s.scale_to_si, 1.0)
 
     

@@ -16,7 +16,7 @@ def test_quantity_construct_and_to():
     q_m  = q_cm.to(m)                  # -> 2 m
 
     assert isinstance(q_m, Quantity)
-    assert q_m.unit is m
+    assert q_m.unit == m
     assert q_m.dim == LENGTH
     # _mag_si is internal, so check using units:
     assert math.isclose(q_m._mag_si, 2.0)  # 2 m in SI

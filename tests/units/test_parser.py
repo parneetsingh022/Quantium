@@ -197,5 +197,5 @@ def test_unit_name_collapse_on_same_unit_multiplication():
 def test_one_over_unit_name_formatting():
     s = DEFAULT_REGISTRY.get("s")
     inv = Unit("1", 1.0, DIM_0) / s   # via Unit.__truediv__
-    assert inv.name in ("1/s", "s^-1")  # depending on your formatting path
+    assert inv.name == "1/s"  # depending on your formatting path
     assert inv.dim == dim_pow(TIME, -1)

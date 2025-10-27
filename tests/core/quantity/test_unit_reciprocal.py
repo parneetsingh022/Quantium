@@ -61,7 +61,7 @@ def test_unit_reciprocal():
     # --- 7) Chained expressions don't drift scale/dim ---
     # (1/s) * s -> dimensionless
     one = (1 / s) * s
-    assert one.name  # any name; just ensure object exists
+    assert one.name  == '' # any name; just ensure object exists
     assert one.dim == DIM_0  # or however your dimensionless dim is represented
 
 @pytest.mark.regression(reason="Issue #19: Invalid numerators must raise TypeError")

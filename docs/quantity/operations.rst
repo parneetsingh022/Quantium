@@ -15,7 +15,7 @@ When two compatible quantities are added or subtracted, the result keeps the uni
    from quantium import u
 
    total_dist = (1 * u.km) + (500 * u.m)
-   print(total_dist)  # 1.5 m
+   print(total_dist)  # 1.5 km
 
    delta_t = (10 * u.min) - (30 * u.s)
    print(delta_t) # 9.5 min
