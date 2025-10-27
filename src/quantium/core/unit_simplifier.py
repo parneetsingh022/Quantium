@@ -24,7 +24,7 @@ SymbolComponents = Dict[str, Tuple[int, Tuple[int, int]]]
 
 _POWER_RE = re.compile(r"^(?P<base>.+?)\^(?P<exp>-?\d+)$")
 _MAX_CANON_POWER = 12
-_ALLOWED_CANON_PREFIX_SYMBOLS = frozenset({"T", "G", "M", "k", "m", "\u00b5", "p"})
+_ALLOWED_CANON_PREFIX_SYMBOLS = frozenset({"k", "m", "\u00b5", "n", "p"})
 
 
 def _dim_key(dim: Dim) -> tuple[int, ...]:
