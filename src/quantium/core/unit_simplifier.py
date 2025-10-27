@@ -63,7 +63,7 @@ class UnitNameSimplifier:
         from quantium.units.registry import DEFAULT_REGISTRY
 
         mapping: dict[tuple[int, ...], str] = {}
-        for name, unit in DEFAULT_REGISTRY.all().items():
+        for _ , unit in DEFAULT_REGISTRY.all().items():
             sym = preferred_symbol_for_dim(unit.dim)
             if sym:
                 mapping.setdefault(_dim_key(unit.dim), sym)
@@ -333,7 +333,7 @@ class UnitNameSimplifier:
                                 symbol = f"{prefix.symbol}{pref_sym}"
                                 try:
                                     candidate_unit = DEFAULT_REGISTRY.get(symbol)
-                                except Exception:
+                                except ValueError:
                                     continue
                                 if target_exp == -1:
                                     candidate_unit = candidate_unit ** -1
@@ -441,7 +441,7 @@ class UnitNameSimplifier:
                             symbol = f"{prefix.symbol}{pref_sym}"
                             try:
                                 candidate_unit = DEFAULT_REGISTRY.get(symbol)
-                            except Exception:
+                            except ValueError:
                                 continue
                             candidate_value = mag_si / candidate_unit.scale_to_si
                             preferred_candidates.append((candidate_value, candidate_unit))

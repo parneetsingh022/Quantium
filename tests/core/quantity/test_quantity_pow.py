@@ -9,7 +9,8 @@ def _name(sym: str, n: int) -> str:
     #return "1" if n == 0 else (sym if n == 1 else f"{sym}^{n}")
     if n == 0:
         return 1
-    if n >= 1: return f"{sym}^{n}"
+    if n >= 1: 
+        return f"{sym}^{n}"
 
     return f"1/{sym}^{abs(n)}"
 
