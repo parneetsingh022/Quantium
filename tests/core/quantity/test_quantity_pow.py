@@ -4,6 +4,7 @@ import pytest
 
 from quantium.core.dimensions import DIM_0, LENGTH, TEMPERATURE, dim_div, dim_mul, dim_pow
 from quantium.core.quantity import Unit
+from quantium import u
 
 def _name(sym: str, n: int) -> str:
     #return "1" if n == 0 else (sym if n == 1 else f"{sym}^{n}")
@@ -76,3 +77,10 @@ def test_quantity_pow_negative_high_exponents_regression_issue_33(sym: str, scal
     # Magnitude in the resulting unit should be value**n
     mag_in_unit = qp._mag_si / qp.unit.scale_to_si
     assert math.isclose(mag_in_unit, value ** n, rel_tol=1e-12, abs_tol=1e-12)
+
+
+def test_quantity_pow_with_fractions_repr():
+    q = 100 * u.cm ** (1/3)
+    assert repr(q) == "100 cm^(1/3)"
+    assert repr(q.to(u.m**(1/3))).endswith("m^(1/3)")
+    #assert repr(q.to('m^(1/3)')).endswith("m^(1/3)")

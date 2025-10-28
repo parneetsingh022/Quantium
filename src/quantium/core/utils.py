@@ -201,8 +201,12 @@ def _expand_parentheses(name: str) -> str:
     return s
 
 
-def _sup(n: int) -> str:
-    return "" if n == 1 else str(n).translate(_SUPERSCRIPTS)
+def _sup(n: int | Fraction) -> str:
+    n = simplify_fraction(n)
+    if isinstance(n , int):
+        return "" if n == 1 else str(n).translate(_SUPERSCRIPTS)
+    
+    return f"^({n.numerator}/{n.denominator})"
 
 
 # match token like "cm", "s^2", "m^(2)", "kg^sup(3)", or with unicode superscripts "m²"
