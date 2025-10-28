@@ -395,3 +395,27 @@ def test_invalid_operations_fail():
     # This also fails.
     with pytest.raises(TypeError, match="unsupported operand type"):
         _ = LENGTH - (1, 0, 0, 0, 0, 0, 0)
+
+# --- Modulo (third-arg pow) rejection tests ----------------------------------------
+
+def test_dimension_pow_rejects_three_arg_pow_with_ints():
+    # pow(a, b, c) should raise because modular exponentiation is not supported
+    with pytest.raises(TypeError, match="Modulo exponentiation is not supported for Dimension."):
+        pow(LENGTH, 2, 3)
+
+@pytest.mark.parametrize("exp", [2, Fraction(1, 2), 0.5])
+@pytest.mark.parametrize("mod", [2, 7, 3.0, Fraction(3, 1)])
+def test_dimension_pow_rejects_three_arg_pow_various_types(exp, mod):
+    # Any non-None modulo should be rejected, regardless of exponent/modulo type
+    with pytest.raises(TypeError, match="Modulo exponentiation is not supported for Dimension."):
+        pow(LENGTH, exp, mod)
+
+def test_dimension_dunder_pow_rejects_modulo_kwarg():
+    # Directly calling the magic method with modulo kwarg should also be rejected
+    with pytest.raises(TypeError, match="Modulo exponentiation is not supported for Dimension."):
+        LENGTH.__pow__(2, modulo=5)
+
+def test_dimension_pow_two_args_still_works():
+    # Sanity: regular exponentiation (no modulo) still behaves normally
+    assert pow(LENGTH, 2) == (2, 0, 0, 0, 0, 0, 0)
+    assert isinstance(pow(LENGTH, 2), Dimension)
