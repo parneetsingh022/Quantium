@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - **Unreleased**
 
 ### Added
-- Allowed raising Quantity objects to float and fractional powers, enabling operations such as x**0.5 or x**Fraction(1,3).
+- Allowed raising Quantity objects to float and fractional powers, enabling operations such as `x**0.5` or `x**Fraction(1,3)`.
 
 ### Fixed
 
