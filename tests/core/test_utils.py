@@ -24,9 +24,12 @@ from quantium.units.registry import DEFAULT_REGISTRY as ureg
     (1, ""),         # 1 -> empty
     (2, "²"),
     (3, "³"),
-    (10, "¹⁰"),
+    (10, "^10"),
     (-1, "⁻¹"),      # superscript minus + superscript ONE
     (-3, "⁻³"),      # superscript minus + superscript THREE
+    (Fraction(3/2), "^(3/2)"),
+    (Fraction(3/1), "³"),
+    (Fraction(248,1), "^248")
 ])
 def test__sup(n, expected):
     assert utils._sup(n) == expected

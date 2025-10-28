@@ -204,8 +204,12 @@ def _expand_parentheses(name: str) -> str:
 def _sup(n: int | Fraction) -> str:
     n = simplify_fraction(n)
     if isinstance(n , int):
-        return "" if n == 1 else str(n).translate(_SUPERSCRIPTS)
-    
+        if n == 1:
+            return ""
+        elif n < 10:
+            return str(n).translate(_SUPERSCRIPTS)
+        else:
+            return f"^{n}"
     return f"^({n.numerator}/{n.denominator})"
 
 
