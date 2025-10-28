@@ -355,14 +355,15 @@ def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
 
     def _fmt(sym: str, power: Fraction) -> str:
         abs_power = abs(power)
+
         if abs_power == 1:
-            return sym
-        if abs_power.denominator == 1:
-            numer = abs_power.numerator
-            if 0 < numer < 10:
-                return f"{sym}{_sup(numer)}"
-            return f"{sym}^{numer}"
-        return f"{sym}^({abs_power.numerator}/{abs_power.denominator})"
+            suffix = ""
+        elif abs_power.denominator == 1:
+            suffix = _sup(abs_power.numerator)
+        else:
+            suffix = _sup(abs_power)
+
+        return f"{sym}{suffix}"
 
     def join(parts: List[Tuple[str, Fraction]]) -> str:
         if not parts:
