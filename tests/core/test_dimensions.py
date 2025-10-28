@@ -272,6 +272,14 @@ def test_repr_deterministic_and_ordered():
     assert repr(a) == "[L^1][M^1][T^-2]"
     assert repr(a) == repr(b)
 
+def test_repr_with_fractions():
+    # Same dimensional values, different construction order must give same repr
+    a = (LENGTH * MASS * (TIME ** -2))**(0.5)
+    b = (MASS * (TIME ** -2) * LENGTH)**Fraction(0.5)
+
+    assert repr(a) == "[L^(1/2)][M^(1/2)][T^-1]"
+    assert repr(a) == repr(b)
+
 # --- Helpers: as_tuple, is_dimensionless ------------------------------------
 
 def test_as_tuple_returns_plain_tuple_not_dimension():

@@ -97,12 +97,15 @@ class Dimension(tuple):
     def __repr__(self) -> str:
         # readable, but still unambiguous
         names = ("L", "M", "T", "I", "Θ", "N", "J")
-        parts = "".join(f"[{n}^{v}]" for n, v in zip(names, self, strict=True))
 
         parts = ""
         for n, v in zip(names, self, strict=True):
             if v != 0:
-                parts += f"[{n}^{v}]"
+                exp = v
+                if isinstance(v, Fraction):
+                    exp = f"({v.numerator}/{v.denominator})"
+
+                parts += f"[{n}^{exp}]"
 
         return parts
 
