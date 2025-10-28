@@ -45,12 +45,14 @@ def test__parse_exponent():
 
     # Sanity: plain, caret, and ^( ) and ^sup( ) all work
     for token, expected in [
-        ("m", 1),
-        ("m^3", 3),
-        ("m^(4)", 4),
-        ("m^sup(5)", 5),
-        ("m" + SUP2, 2),                 # "m²" with explicit codepoint
-        ("s" + SUP_MINUS + SUP3, -3),    # "s⁻³" with explicit codepoints
+        ("m", Fraction(1, 1)),
+        ("m^3", Fraction(3, 1)),
+        ("m^(4)", Fraction(4, 1)),
+        ("m^(1/3)", Fraction(1, 3)),
+        ("m^(-2/5)", Fraction(-2, 5)),
+        ("m^sup(5)", Fraction(5, 1)),
+        ("m" + SUP2, Fraction(2, 1)),                 # "m²" with explicit codepoint
+        ("s" + SUP_MINUS + SUP3, Fraction(-3, 1)),    # "s⁻³" with explicit codepoints
     ]:
         m = utils._TOKEN_RE.fullmatch(token)
         assert m, f"Pattern did not match token {token!r}"
@@ -68,6 +70,7 @@ def test__parse_exponent():
     ("kg*m/s^2", {"kg": 1, "m": 1, "s": -2}),     # ASCII '*' normalized to '·'
     ("cm/ms^3·ms", {"cm": 1, "ms": -2}),          # (cm / ms^3) · ms -> cm / ms^2
     ("m·s/s", {"m": 1}),                          # cancellation
+    ("m^(1/3)", {"m": Fraction(1, 3)}),
     ("1", {}),                                    # dimensionless token
     ("", {}),                                     # empty
 ])

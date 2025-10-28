@@ -3,6 +3,7 @@ quantium.units.parser
 """
 
 from functools import lru_cache
+from fractions import Fraction
 from typing import Tuple, Union, Optional
 from typing import TYPE_CHECKING
 
@@ -12,21 +13,14 @@ if TYPE_CHECKING:
 
 # --- Plan node types ------------------------------------------------
 # ("name", <str>)
-# ("pow", <plan>, <int>)
+# ("pow", <plan>, <int|Fraction>)
 # ("mul", <plan>, <plan>)
 # ("div", <plan>, <plan>)
-Plan = Tuple[str, Union[str, int, "Plan"], Union[int, "Plan", None]]
+Plan = Tuple[str, Union[str, "Plan"], Union[int, Fraction, "Plan", None]]
 
 # ---------------- Parser that builds a PLAN (no registry lookups!) ----------------
 class _UnitExprParser:
-    """
-    Grammar (no numbers except signed integers after **):
-      expr   := term (('*' | '/') term)*
-      term   := factor ['**' signed_int]?
-      factor := NAME | '(' expr ')'
-      NAME   := [A-Za-z_][A-Za-z0-9_]*
-      signed_int := ['+'|'-']? [0-9]+
-    """
+    """Recursive-descent parser for unit expressions with integer and rational exponents."""
     def __init__(self, text: str):
         self.s = text
         self.n = len(text)
@@ -58,14 +52,22 @@ class _UnitExprParser:
                 break
         return left
 
-    # term := factor ['**' signed_int]?
+    # term := factor ( ('**' signed_int) | ('^' exponent) )*
     def _parse_term(self) -> Plan:
         base = self._parse_factor()
-        self._skip_ws()
-        if self._peek('**'):
-            self._eat('**')
-            exp = self._parse_signed_int()
-            base = ("pow", base, exp)
+        while True:
+            self._skip_ws()
+            if self._peek('**'):
+                self._eat('**')
+                exp = self._parse_signed_int()
+                base = ("pow", base, exp)
+                continue
+            if self._peek('^'):
+                self._eat('^')
+                exp_frac = self._parse_caret_exponent()
+                base = ("pow", base, exp_frac)
+                continue
+            break
         return base
 
     # factor := NAME | '(' expr ')'
@@ -90,7 +92,7 @@ class _UnitExprParser:
         return ("name", name, None)
 
     # ---- token helpers ----
-    def _parse_name(self) -> Optional[str]:  # <-- FIX: Added return type
+    def _parse_name(self) -> Optional[str]:
         self._skip_ws()
         i0 = self.i
         if i0 < self.n and (self.s[i0].isalpha() or self.s[i0] == '_'):
@@ -111,6 +113,47 @@ class _UnitExprParser:
         if i1 == self.i:
             raise ValueError(f"Expected integer exponent at {self.i}")
         return int(self.s[i0:self.i])
+
+    def _parse_unsigned_int(self) -> int:
+        self._skip_ws()
+        i0 = self.i
+        while self.i < self.n and self.s[self.i].isdigit():
+            self.i += 1
+        if i0 == self.i:
+            raise ValueError(f"Expected unsigned integer at {self.i}")
+        return int(self.s[i0:self.i])
+
+    def _parse_caret_exponent(self) -> Fraction:
+        self._skip_ws()
+        if self._peek('('):
+            self._eat('(')
+            numer = self._parse_signed_int()
+            self._skip_ws()
+            if self._peek(')'):
+                self._eat(')')
+                return Fraction(numer, 1)
+            self._eat('/')
+            denom = self._parse_unsigned_int()
+            if denom == 0:
+                raise ValueError("Denominator of fractional exponent cannot be zero")
+            self._skip_ws()
+            self._eat(')')
+            return Fraction(numer, denom)
+
+        sign = 1
+        if self._peek('-'):
+            self._eat('-')
+            sign = -1
+        elif self._peek('+'):
+            self._eat('+')
+        self._skip_ws()
+        i0 = self.i
+        while self.i < self.n and self.s[self.i].isdigit():
+            self.i += 1
+        if i0 == self.i:
+            raise ValueError(f"Expected numeric exponent after '^' at {self.i}")
+        value = int(self.s[i0:self.i])
+        return Fraction(sign * value, 1)
 
     def _skip_ws(self) -> None:  # <-- FIX: Added return type
         s, n, i = self.s, self.n, self.i
@@ -150,8 +193,8 @@ def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit":  # <-- FIX: Added re
     elif kind == "pow":
         if not isinstance(op1, tuple):
             raise ValueError(f"Malformed 'pow' plan (expected plan tuple): {plan!r}")
-        if not isinstance(op2, int):
-            raise ValueError(f"Malformed 'pow' plan (expected int exponent): {plan!r}")
+        if not isinstance(op2, (int, Fraction)):
+            raise ValueError(f"Malformed 'pow' plan (expected int or Fraction exponent): {plan!r}")
         base = _eval_plan(op1, reg)
         return base ** op2
 
@@ -179,10 +222,10 @@ def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit":  # <-- FIX: Added re
 # ---------------- Public API with caching-safe compilation ----------------
 @lru_cache(maxsize=4096)
 def _compile_unit_expr(expr: str) -> Plan:
-    disallowed = set('~!@#$%^&|+=,:;?<>\'\"`\\[]{}')
+    disallowed = set('~!@#$%&|+=,:;?<>\'"`\\[]{}')
     if any(c in disallowed for c in expr):
         raise ValueError(
-            "Only *, /, **, parentheses, unit names, and signed integer exponents are allowed."
+            "Only *, /, **, ^, parentheses, unit names, and integer or rational exponents are allowed."
         )
     return _UnitExprParser(expr).parse()
 

@@ -51,11 +51,6 @@ def test_parse_missing_exponent_raises():
     with pytest.raises(ValueError):
         _UnitExprParser("m**").parse()
 
-def test_parse_double_pow_in_term_raises_trailing():
-    # only one ** per term; the second triggers trailing input error
-    with pytest.raises(ValueError):
-        _UnitExprParser("m**2**3").parse()
-
 def test_prefilter_disallowed_characters():
     with pytest.raises(ValueError):
         _compile_unit_expr("m+s")  # '+' not allowed except as exponent sign

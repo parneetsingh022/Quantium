@@ -216,11 +216,16 @@ _TOKEN_RE: Pattern[str] = re.compile(
     # Exclude superscript digits (⁰¹²³⁴⁵⁶⁷⁸⁹) and superscript minus (⁻)
     (?P<sym>[^·/\s^⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)
     (?:
-        \^(\(?(?P<exp1>-?\d+)\)?          # ^2 or ^(2)
-          |sup\((?P<exp2>-?\d+)\)         # ^sup(2)
+        \^
+        (?:
+            (?P<exp_raw>-?\d+)
+            |
+            \((?P<exp_paren>[^()]+)\)
+            |
+            sup\((?P<exp_sup>-?\d+)\)
         )
         |
-        (?P<usup>[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)          # or existing unicode superscripts
+        (?P<usup>[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)
     )?
     \s*
 """,
@@ -229,16 +234,34 @@ _TOKEN_RE: Pattern[str] = re.compile(
 
 
 
-def _parse_exponent(m: re.Match[str]) -> int:
-    e = m.group("exp1") or m.group("exp2")
-    if e is not None:
-        return int(e)
+def _parse_exponent(m: re.Match[str]) -> Fraction:
+    raw = m.group("exp_raw")
+    if raw is not None:
+        return Fraction(int(raw), 1)
+
+    paren = m.group("exp_paren")
+    if paren is not None:
+        text = paren.strip()
+        if "/" in text:
+            numer_str, denom_str = text.split("/", 1)
+            numer = int(numer_str)
+            denom = int(denom_str)
+            if denom == 0:
+                raise ValueError("Denominator of fractional exponent cannot be zero")
+            return Fraction(numer, denom)
+        return Fraction(int(text), 1)
+
+    sup = m.group("exp_sup")
+    if sup is not None:
+        return Fraction(int(sup), 1)
+
     us = m.group("usup")
     if us:
-        # map unicode superscripts back to int
         tbl = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻", "0123456789-")
-        return int(us.translate(tbl) or "1")
-    return 1
+        value = us.translate(tbl) or "1"
+        return Fraction(int(value), 1)
+
+    return Fraction(1, 1)
 
 
 def _tokenize_name_merge(name: str) -> Dict[str, Fraction]:
