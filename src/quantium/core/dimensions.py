@@ -117,7 +117,7 @@ def dim_mul(a: DimLike, b: DimLike) -> Dimension:
 def dim_div(a: DimLike, b: DimLike) -> Dimension:
     return Dimension(a) / b
 
-def dim_pow(a: DimLike, n: int) -> Dimension:
+def dim_pow(a: DimLike, n: int | float | Fraction) -> Dimension:
     return Dimension(a) ** n
 
 # --- Public constants (identical names, now Dimension instances) ------------
