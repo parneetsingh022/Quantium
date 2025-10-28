@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - **Unreleased**
 
+### Added
+- Allowed raising Quantity objects to float and fractional powers, enabling operations such as x**0.5 or x**Fraction(1,3).
+
 ### Fixed
 
 - Added robust rules for multiplication/division of same-dimension units, now the symbol with the higher total power is chosen (e.g. m * cm**2 -> cm³). [#91]
 - Enhanced handling of complex mixed-prefix units (e.g. kg·mm/s² -> mN). [#91]
 - Improves readability, prefix consistency, and reduces ambiguity in derived units. [#91]
+
 
 
 [#91]: https://github.com/parneetsingh022/quantium/issues/91
