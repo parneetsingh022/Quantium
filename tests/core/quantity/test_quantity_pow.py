@@ -4,6 +4,7 @@ import pytest
 
 from quantium.core.dimensions import DIM_0, LENGTH, TEMPERATURE, dim_div, dim_mul, dim_pow
 from quantium.core.quantity import Unit
+from quantium import u
 
 def _name(sym: str, n: int) -> str:
     #return "1" if n == 0 else (sym if n == 1 else f"{sym}^{n}")
@@ -76,3 +77,38 @@ def test_quantity_pow_negative_high_exponents_regression_issue_33(sym: str, scal
     # Magnitude in the resulting unit should be value**n
     mag_in_unit = qp._mag_si / qp.unit.scale_to_si
     assert math.isclose(mag_in_unit, value ** n, rel_tol=1e-12, abs_tol=1e-12)
+
+
+def test_quantity_pow_with_fractions_repr():
+    # Simple fractional power
+    q = 100 * u.cm ** (1/3)
+    q2 = 100 * u("cm^(1/3)")
+    assert repr(q) == "100 cm^(1/3)"
+    assert repr(q.to(u.m**(1/3))).endswith("m^(1/3)")
+    assert repr(q.to('m^(1/3)')).endswith("m^(1/3)")
+    assert q == q2
+
+    # Joule fractional power
+    q3 = 50 * u.J ** (1/2)
+    q4 = 50 * u("J^(1/2)")
+    assert repr(q3) == "50 J^(1/2)"
+    assert repr(q3.to("kg^(1/2)*m/s")).endswith("kg^(1/2)·m/s")
+    assert q3 == q4
+
+    # Composite unit: Joule * meter
+    q5 = 2 * (u.J * u.m) ** (1/3)
+    q6 = 2 * u("J*m") ** (1/3)
+    assert repr(q5) == "2 J^(1/3)·m^(1/3)"
+    assert q5 == q6
+
+    # Force unit: kg*m/s**2 fractional power
+    q7 = 10 * (u.kg * u.m / u.s**2) ** (1/2)
+    q8 = 10 * u("kg*m/s^2") ** (1/2)
+    assert repr(q7) == "10 N^(1/2)"
+    assert q7 == q8
+
+    # Nested powers with mixed units
+    q9 = 3 * (u.J**(2/3) * u.kg**(1/3))
+    q10 = 3 * u("J^(2/3)*kg^(1/3)")
+    assert repr(q9) == "3 J^(2/3)·kg^(1/3)"
+    assert q9 == q10

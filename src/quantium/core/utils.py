@@ -24,6 +24,8 @@ from typing import (
 )
 
 from typing import Protocol, TypeAlias, runtime_checkable
+from fractions import Fraction
+from math import isfinite
 
 # A dimension is a 7-tuple of integer exponents: (L, M, T, I, Θ, N, J)
 Dim: TypeAlias = Tuple[int, int, int, int, int, int, int]
@@ -199,8 +201,16 @@ def _expand_parentheses(name: str) -> str:
     return s
 
 
-def _sup(n: int) -> str:
-    return "" if n == 1 else str(n).translate(_SUPERSCRIPTS)
+def _sup(n: int | Fraction) -> str:
+    n = simplify_fraction(n)
+    if isinstance(n , int):
+        if n == 1:
+            return ""
+        elif n < 10:
+            return str(n).translate(_SUPERSCRIPTS)
+        else:
+            return f"^{n}"
+    return f"^({n.numerator}/{n.denominator})"
 
 
 # match token like "cm", "s^2", "m^(2)", "kg^sup(3)", or with unicode superscripts "m²"
@@ -210,11 +220,16 @@ _TOKEN_RE: Pattern[str] = re.compile(
     # Exclude superscript digits (⁰¹²³⁴⁵⁶⁷⁸⁹) and superscript minus (⁻)
     (?P<sym>[^·/\s^⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)
     (?:
-        \^(\(?(?P<exp1>-?\d+)\)?          # ^2 or ^(2)
-          |sup\((?P<exp2>-?\d+)\)         # ^sup(2)
+        \^
+        (?:
+            (?P<exp_raw>-?\d+)
+            |
+            \((?P<exp_paren>[^()]+)\)
+            |
+            sup\((?P<exp_sup>-?\d+)\)
         )
         |
-        (?P<usup>[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)          # or existing unicode superscripts
+        (?P<usup>[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+)
     )?
     \s*
 """,
@@ -223,19 +238,37 @@ _TOKEN_RE: Pattern[str] = re.compile(
 
 
 
-def _parse_exponent(m: re.Match[str]) -> int:
-    e = m.group("exp1") or m.group("exp2")
-    if e is not None:
-        return int(e)
+def _parse_exponent(m: re.Match[str]) -> Fraction:
+    raw = m.group("exp_raw")
+    if raw is not None:
+        return Fraction(int(raw), 1)
+
+    paren = m.group("exp_paren")
+    if paren is not None:
+        text = paren.strip()
+        if "/" in text:
+            numer_str, denom_str = text.split("/", 1)
+            numer = int(numer_str)
+            denom = int(denom_str)
+            if denom == 0:
+                raise ValueError("Denominator of fractional exponent cannot be zero")
+            return Fraction(numer, denom)
+        return Fraction(int(text), 1)
+
+    sup = m.group("exp_sup")
+    if sup is not None:
+        return Fraction(int(sup), 1)
+
     us = m.group("usup")
     if us:
-        # map unicode superscripts back to int
         tbl = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻", "0123456789-")
-        return int(us.translate(tbl) or "1")
-    return 1
+        value = us.translate(tbl) or "1"
+        return Fraction(int(value), 1)
+
+    return Fraction(1, 1)
 
 
-def _tokenize_name_merge(name: str) -> Dict[str, int]:
+def _tokenize_name_merge(name: str) -> Dict[str, Fraction]:
     """Merge exponents from a composed unit name; cancel identical symbols.
 
     Correctly handles sequences like 'cm/ms^3·ms' as (cm / ms^3) · ms.
@@ -243,13 +276,22 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
     if not name or name == "1":
         return {}
 
+    exp_placeholders: Dict[str, str] = {}
+
+    def _protect_exp(match: re.Match[str]) -> str:
+        idx = len(exp_placeholders)
+        key = f"__EXP{idx}__"
+        exp_placeholders[key] = match.group(1)
+        return f"^{key}"
+
+    name = name.replace("**", "^")
+    name = re.sub(r"\^\(([^()]+)\)", _protect_exp, name)
     name = _expand_parentheses(name)
-    # Normalize ASCII separators
     name = name.replace("*", "·")
 
     parts = re.split(r"([·/])", name)  # keep separators
     op = "·"  # last operator seen; '·' or '/'
-    exps: Dict[str, int] = {}
+    exps: Dict[str, Fraction] = {}
 
     for tok in parts:
         if not tok:
@@ -257,27 +299,36 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
         if tok in ("·", "/"):
             op = tok
             continue
+        tok = tok.strip()
         if tok == "1":
             op = "·"
             continue
+
+        for key, value in exp_placeholders.items():
+            if key in tok:
+                tok = tok.replace(key, f"({value})")
 
         m = _TOKEN_RE.fullmatch(tok)
         if m:
             sym = m.group("sym")
             e = _parse_exponent(m)
         else:
-            sym, e = tok, 1
+            sym, e = tok, Fraction(1, 1)
 
         # Apply operator to THIS token only
         if op == "/":
             e = -e
-        exps[sym] = exps.get(sym, 0) + e
+
+        total = exps.get(sym, Fraction(0, 1)) + e
+        if total == 0:
+            exps.pop(sym, None)
+        else:
+            exps[sym] = total
 
         # Reset to multiply for the next token
         op = "·"
 
-    # Drop zeros
-    return {k: v for k, v in exps.items() if v != 0}
+    return exps
 
 
 def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
@@ -295,17 +346,29 @@ def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
 
     exps = _tokenize_name_merge(name)
 
-    num: List[Tuple[str, int]] = sorted(
+    num: List[Tuple[str, Fraction]] = sorted(
         [(s, e) for s, e in exps.items() if e > 0], key=lambda x: x[0]
     )
-    den: List[Tuple[str, int]] = sorted(
+    den: List[Tuple[str, Fraction]] = sorted(
         [(s, -e) for s, e in exps.items() if e < 0], key=lambda x: x[0]
     )
 
-    def join(parts: List[Tuple[str, int]]) -> str:
+    def _fmt(sym: str, power: Fraction) -> str:
+        abs_power = abs(power)
+
+        if abs_power == 1:
+            suffix = ""
+        elif abs_power.denominator == 1:
+            suffix = _sup(abs_power.numerator)
+        else:
+            suffix = _sup(abs_power)
+
+        return f"{sym}{suffix}"
+
+    def join(parts: List[Tuple[str, Fraction]]) -> str:
         if not parts:
             return "1"
-        return "·".join(f"{s}{_sup(p)}" for s, p in parts)
+        return "·".join(_fmt(s, p) for s, p in parts)
 
     num_s = join(num)
     den_s = join(den)
@@ -380,7 +443,6 @@ def preferred_symbol_for_dim(dim: Dim) -> Optional[str]:
     return _PREFERRED_BY_DIM.get(_dim_key(dim))
 
 
-# Optional helper if you ever want to refresh after registering new units:
 def invalidate_preferred_cache() -> None:
     global _PREFERRED_BY_DIM
     _PREFERRED_BY_DIM = None
@@ -393,3 +455,69 @@ def invalidate_preferred_cache() -> None:
     cache_clear = getattr(_quantity, "_preferred_dim_symbol_map", None)
     if cache_clear and hasattr(cache_clear, "cache_clear"):
         cache_clear.cache_clear()
+
+
+
+def rationalize(value : int | float, *, as_fraction : bool = False, max_denominator : int = 1000) -> int | Fraction:
+    """
+    Convert a float or int to an exact rational representation.
+    
+    Parameters
+    ----------
+    value : int | float
+        The number to convert.
+    as_fraction : bool, optional
+        If True, return a Fraction; otherwise return int if denominator==1.
+    max_denominator : int, optional
+        Maximum denominator when checking float rationality.
+    
+    Returns
+    -------
+    int | Fraction
+        Exact rational representation (integer or fraction).
+    
+    Raises
+    ------
+    ValueError
+        If the number is irrational (cannot be represented exactly as a rational).
+    TypeError
+        If input type is not int or float.
+    """
+
+    # Validate type
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Expected int or float, got {type(value).__name__}")
+
+    # Integers are always rational
+    if isinstance(value, int):
+        return Fraction(value) if as_fraction else value
+
+    # Check finite float
+    if not isfinite(value):
+        raise ValueError("Value must be finite (not inf or NaN).")
+
+    # --- Attempt exact rationalization ---
+    frac = Fraction(value).limit_denominator(max_denominator)
+
+    # Verify round-trip exactness
+    if float(frac) != value:
+        raise ValueError(f"{value} cannot be exactly represented as a rational number.")
+
+    # Return type as requested
+    if as_fraction:
+        return frac
+    return frac.numerator if frac.denominator == 1 else frac
+
+
+def simplify_fraction(x: Fraction | int | float) -> int | Fraction:
+    """Return an int if the fraction is an exact integer, otherwise the reduced Fraction."""
+    if isinstance(x, Fraction):
+        # reduce() is automatic; just check denominator
+        if x.denominator == 1:
+            return x.numerator
+        return x
+    
+    if(isinstance(x, float)):
+        x = rationalize(x)
+        
+    return x

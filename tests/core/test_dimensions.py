@@ -1,4 +1,6 @@
 import pytest
+from fractions import Fraction
+import math
 
 # If your file lives at src/quantium/units/dimensions.py, this import will work:
 from quantium.core.dimensions import (
@@ -16,6 +18,8 @@ from quantium.core.dimensions import (
     dim_pow,
     Dimension
 )
+
+
 
 # --- Basic structure & base vectors -------------------------------------------------
 
@@ -182,11 +186,37 @@ def test_dimension_rejects_wrong_length():
     with pytest.raises(ValueError):
         Dimension((1,2,3))  # not 7
 
-def test_dimension_rejects_non_int_exponent_for_pow():
-    d = Dimension((1,0,0,0,0,0,0))
-    with pytest.raises(TypeError):
-        _ = d ** 2.5
+def test_dimension_allows_fractional_and_int_powers():
+    d = Dimension((1, 0, 0, 0, 0, 0, 0))
+    
+    # Integer exponent
+    result_int = d ** 2
+    assert isinstance(result_int, Dimension)
+    
+    # Fraction exponent (explicit)
+    result_frac = d ** Fraction(1, 2)
+    assert isinstance(result_frac, Dimension)
+    
+    # Rational float exponent (e.g., 0.5)
+    result_float = d ** 0.5
+    assert isinstance(result_float, Dimension)
 
+
+def test_dimension_rejects_invalid_exponent_types():
+    d = Dimension((1, 0, 0, 0, 0, 0, 0))
+    
+    for bad in ["2", [2], (2,), None, complex(1, 1)]:
+        with pytest.raises(TypeError):
+            _ = d ** bad
+
+
+def test_dimension_rejects_irrational_float_exponents():
+    d = Dimension((1, 0, 0, 0, 0, 0, 0))
+    
+    # irrational like pi or sqrt(2)
+    for bad in [math.pi, math.sqrt(2)]:
+        with pytest.raises(ValueError):
+            _ = d ** bad
 def test_operator_algebraic_laws():
     # (ab)^n = a^n b^n
     a, b, n = LENGTH, TIME, 3
@@ -240,6 +270,14 @@ def test_repr_deterministic_and_ordered():
     a = LENGTH * MASS * (TIME ** -2)
     b = MASS * (TIME ** -2) * LENGTH
     assert repr(a) == "[L^1][M^1][T^-2]"
+    assert repr(a) == repr(b)
+
+def test_repr_with_fractions():
+    # Same dimensional values, different construction order must give same repr
+    a = (LENGTH * MASS * (TIME ** -2))**(0.5)
+    b = (MASS * (TIME ** -2) * LENGTH)**Fraction(0.5)
+
+    assert repr(a) == "[L^(1/2)][M^(1/2)][T^-1]"
     assert repr(a) == repr(b)
 
 # --- Helpers: as_tuple, is_dimensionless ------------------------------------
@@ -357,3 +395,27 @@ def test_invalid_operations_fail():
     # This also fails.
     with pytest.raises(TypeError, match="unsupported operand type"):
         _ = LENGTH - (1, 0, 0, 0, 0, 0, 0)
+
+# --- Modulo (third-arg pow) rejection tests ----------------------------------------
+
+def test_dimension_pow_rejects_three_arg_pow_with_ints():
+    # pow(a, b, c) should raise because modular exponentiation is not supported
+    with pytest.raises(TypeError, match="Modulo exponentiation is not supported for Dimension."):
+        pow(LENGTH, 2, 3)
+
+@pytest.mark.parametrize("exp", [2, Fraction(1, 2), 0.5])
+@pytest.mark.parametrize("mod", [2, 7, 3.0, Fraction(3, 1)])
+def test_dimension_pow_rejects_three_arg_pow_various_types(exp, mod):
+    # Any non-None modulo should be rejected, regardless of exponent/modulo type
+    with pytest.raises(TypeError, match="Modulo exponentiation is not supported for Dimension."):
+        pow(LENGTH, exp, mod)
+
+def test_dimension_dunder_pow_rejects_modulo_kwarg():
+    # Directly calling the magic method with modulo kwarg should also be rejected
+    with pytest.raises(TypeError, match="Modulo exponentiation is not supported for Dimension."):
+        LENGTH.__pow__(2, modulo=5)
+
+def test_dimension_pow_two_args_still_works():
+    # Sanity: regular exponentiation (no modulo) still behaves normally
+    assert pow(LENGTH, 2) == (2, 0, 0, 0, 0, 0, 0)
+    assert isinstance(pow(LENGTH, 2), Dimension)

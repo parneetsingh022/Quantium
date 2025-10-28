@@ -1,7 +1,10 @@
 import pytest
+import math
+from fractions import Fraction
 
 # Target module
 import quantium.core.utils as utils
+
 
 # Dimension helpers
 from quantium.core.dimensions import (
@@ -21,9 +24,12 @@ from quantium.units.registry import DEFAULT_REGISTRY as ureg
     (1, ""),         # 1 -> empty
     (2, "²"),
     (3, "³"),
-    (10, "¹⁰"),
+    (10, "^10"),
     (-1, "⁻¹"),      # superscript minus + superscript ONE
     (-3, "⁻³"),      # superscript minus + superscript THREE
+    (Fraction(3/2), "^(3/2)"),
+    (Fraction(3/1), "³"),
+    (Fraction(248,1), "^248")
 ])
 def test__sup(n, expected):
     assert utils._sup(n) == expected
@@ -42,12 +48,14 @@ def test__parse_exponent():
 
     # Sanity: plain, caret, and ^( ) and ^sup( ) all work
     for token, expected in [
-        ("m", 1),
-        ("m^3", 3),
-        ("m^(4)", 4),
-        ("m^sup(5)", 5),
-        ("m" + SUP2, 2),                 # "m²" with explicit codepoint
-        ("s" + SUP_MINUS + SUP3, -3),    # "s⁻³" with explicit codepoints
+        ("m", Fraction(1, 1)),
+        ("m^3", Fraction(3, 1)),
+        ("m^(4)", Fraction(4, 1)),
+        ("m^(1/3)", Fraction(1, 3)),
+        ("m^(-2/5)", Fraction(-2, 5)),
+        ("m^sup(5)", Fraction(5, 1)),
+        ("m" + SUP2, Fraction(2, 1)),                 # "m²" with explicit codepoint
+        ("s" + SUP_MINUS + SUP3, Fraction(-3, 1)),    # "s⁻³" with explicit codepoints
     ]:
         m = utils._TOKEN_RE.fullmatch(token)
         assert m, f"Pattern did not match token {token!r}"
@@ -65,6 +73,7 @@ def test__parse_exponent():
     ("kg*m/s^2", {"kg": 1, "m": 1, "s": -2}),     # ASCII '*' normalized to '·'
     ("cm/ms^3·ms", {"cm": 1, "ms": -2}),          # (cm / ms^3) · ms -> cm / ms^2
     ("m·s/s", {"m": 1}),                          # cancellation
+    ("m^(1/3)", {"m": Fraction(1, 3)}),
     ("1", {}),                                    # dimensionless token
     ("", {}),                                     # empty
 ])
@@ -223,5 +232,159 @@ def test_expand_parentheses_idempotent():
     twice = utils._expand_parentheses(once)
     assert once == twice
 
+#############################################
+# rationalize function test
+#############################################
 
+
+@pytest.mark.parametrize("value,expected", [
+    (0, 0),
+    (3, 3),
+    (-7, -7),
+])
+def test_integers_return_int(value, expected):
+    assert utils.rationalize(value) == expected
+
+
+@pytest.mark.parametrize("value,expected", [
+    (0, Fraction(0, 1)),
+    (3, Fraction(3, 1)),
+    (-7, Fraction(-7, 1)),
+])
+def test_integers_as_fraction(value, expected):
+    assert utils.rationalize(value, as_fraction=True) == expected
+
+
+@pytest.mark.parametrize("value,expected_frac", [
+    (0.5, Fraction(1, 2)),     # exact as float
+    (1.25, Fraction(5, 4)),    # exact as float
+    (2.0, Fraction(2, 1)),     # denominator 1 -> will return int if as_fraction=False
+    (-0.5, Fraction(-1, 2)),
+])
+def test_exact_float_rationals(value, expected_frac):
+    out = utils.rationalize(value, as_fraction=True)
+    assert out == expected_frac
+
+    out_default = utils.rationalize(value, as_fraction=False)
+    if expected_frac.denominator == 1:
+        assert isinstance(out_default, int)
+        assert out_default == expected_frac.numerator
+    else:
+        assert isinstance(out_default, Fraction)
+        assert out_default == expected_frac
+
+
+def test_returns_int_when_denominator_is_one():
+    assert utils.rationalize(2.0) == 2
+    assert isinstance(utils.rationalize(2.0), int)
+
+
+# ----- Error cases -----
+
+@pytest.mark.parametrize("value", [
+    float("inf"),
+    float("-inf"),
+    float("nan"),
+])
+def test_nonfinite_raises_value_error(value):
+    with pytest.raises(ValueError):
+        utils.rationalize(value)
+
+
+@pytest.mark.parametrize("value", [
+    math.pi,                # irrational
+    math.sqrt(2),           # irrational
+    1.3333333333,           # not exactly 4/3 as a float -> should raise
+    0.142857,               # close to 1/7 but not exact -> should raise
+])
+def test_irrational_or_nonexact_decimal_raises(value):
+    with pytest.raises(ValueError):
+        utils.rationalize(value)
+
+
+def test_type_error_on_unsupported_types():
+    with pytest.raises(TypeError):
+        utils.rationalize("3/2")  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        utils.rationalize(Fraction(3, 2))  # type: ignore[arg-type]
+
+
+# ----- max_denominator behavior -----
+
+def test_max_denominator_does_not_force_acceptance():
+    # Even with small max_denominator, 0.5 still maps to 1/2 exactly (float equality holds)
+    assert utils.rationalize(0.5, max_denominator=2) == Fraction(1, 2)
+
+    # A value like 0.142857 is not exactly equal to 1/7 in binary float;
+    # round-trip check should fail regardless of max_denominator.
+    with pytest.raises(ValueError):
+        utils.rationalize(0.142857, max_denominator=7)
+
+    with pytest.raises(ValueError):
+        utils.rationalize(0.142857, max_denominator=10_000)
+
+#############################################
+# simplify_fraction function test
+#############################################
+
+def test_reduces_to_int_simple():
+    assert utils.simplify_fraction(Fraction(4, 2)) == 2
+    assert isinstance(utils.simplify_fraction(Fraction(4, 2)), int)
+
+def test_reduces_to_int_zero():
+    # Any zero Fraction reduces to 0/1
+    assert utils.simplify_fraction(Fraction(0, 5)) == 0
+    assert isinstance(utils.simplify_fraction(Fraction(0, 5)), int)
+
+def test_reduces_to_int_negative():
+    assert utils.simplify_fraction(Fraction(-6, 3)) == -2
+    assert isinstance(utils.simplify_fraction(Fraction(-6, 3)), int)
+
+def test_keeps_fraction_when_not_integer():
+    out = utils.simplify_fraction(Fraction(3, 2))
+    assert out == Fraction(3, 2)
+    assert isinstance(out, Fraction)
+
+def test_keeps_already_reduced_fraction_when_not_integer():
+    out = utils.simplify_fraction(Fraction(7, 5))
+    assert out == Fraction(7, 5)
+    assert isinstance(out, Fraction)
+
+def test_large_values():
+    # 1000000/250000 reduces to 4 -> int
+    out_int = utils.simplify_fraction(Fraction(1_000_000, 250_000))
+    assert out_int == 4
+    assert isinstance(out_int, int)
+
+    # Non-integer large fraction stays Fraction
+    out_frac = utils.simplify_fraction(Fraction(1_000_001, 250_000))
+    assert out_frac == Fraction(1_000_001, 250_000)
+    assert isinstance(out_frac, Fraction)
+
+def test_pass_through_int_and_float():
+    assert utils.simplify_fraction(5) == 5
+    assert isinstance(utils.simplify_fraction(5), int)
+
+    # Function is specified to return floats as Fractions
+    val = 1.5
+    out = utils.simplify_fraction(val)
+    assert out == val
+    assert isinstance(out, Fraction)
+
+def test_idempotence_on_fraction():
+    f = Fraction(9, 6)  # reduces to 3/2 internally
+    first = utils.simplify_fraction(f)     # -> Fraction(3, 2)
+    second = utils.simplify_fraction(first)
+    assert first == Fraction(3, 2)
+    assert second == Fraction(3, 2)  # calling again doesn’t change result
+
+def test_sign_handling():
+    # Sign should be on numerator; reduction should still yield integer
+    assert utils.simplify_fraction(Fraction(-10, -5)) == 2
+    assert utils.simplify_fraction(Fraction(10, -5)) == -2
+
+def test_simplify_fraction_with_float():
+    result = utils.simplify_fraction(0.5)
+    assert isinstance(result, Fraction)
+    assert result == Fraction(1, 2)
 

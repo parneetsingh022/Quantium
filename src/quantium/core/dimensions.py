@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 from typing import Iterable, Union, Tuple, TypeAlias, Any
+from fractions import Fraction
+from quantium.core.utils import rationalize, simplify_fraction
 
 # --- Public typing -----------------------------------------------------------
 # Keep the old exported name "Dim" so external code doesn't change.
 # It's now an alias to our object, which is a tuple subclass (still runtime-compatible).
 Dim: TypeAlias = "Dimension"
-DimTuple = Tuple[int, int, int, int, int, int, int]
-DimLike = Union["Dimension", DimTuple, Iterable[int]]
+DimTuple = Tuple[Fraction | int, Fraction | int, Fraction | int, Fraction | int, Fraction | int, Fraction | int, Fraction | int]
+DimLike = Union["Dimension", DimTuple, Iterable[int|Fraction]]
 
 # --- Core object -------------------------------------------------------------
 
@@ -26,7 +28,7 @@ class Dimension(tuple):
             return tuple.__new__(cls, data)
 
         # allow any iterable of ints
-        t = tuple(int(x) for x in data)
+        t = tuple(simplify_fraction(x) for x in data)
         if len(t) != 7:
             raise ValueError("Dimension must have length 7 (L, M, T, I, Θ, N, J).")
         return tuple.__new__(cls, t)
@@ -40,10 +42,25 @@ class Dimension(tuple):
         o = Dimension(other)
         return Dimension(x - y for x, y in zip(self, o, strict=True))
 
-    def __pow__(self, n: int) -> "Dimension":
-        if not isinstance(n, int):
-            raise TypeError("Exponent must be an int.")
-        return Dimension(x * n for x in self)
+    def __pow__(self, n:int|float|Fraction, modulo: Any | None = None) -> "Dimension":
+        # Python may call __pow__ with a third arg (modulo) — reject it explicitly
+        if modulo is not None:
+            raise TypeError("Modulo exponentiation is not supported for Dimension.")
+
+        # Type gate
+        if not isinstance(n, (int, float, Fraction)):
+            raise TypeError(f"Exponent must be int, float, or Fraction, got {type(n).__name__}")
+
+        # Normalize exponent to an exact rational
+        if isinstance(n, float):
+            n = rationalize(n, as_fraction=True)  # raises if irrational
+        elif isinstance(n, int):
+            n = Fraction(n, 1)                    # keep everything Fraction internally
+        # else: already a Fraction
+
+        # Multiply each base-dimension exponent
+        new_exps = [e * n for e in self]    # Fraction * Fraction stays exact
+        return Dimension(new_exps)
     
     def __rtruediv__(self, other: DimLike) -> "Dimension":
         """Handles (tuple / Dimension) by calculating (other / self)."""
@@ -80,12 +97,15 @@ class Dimension(tuple):
     def __repr__(self) -> str:
         # readable, but still unambiguous
         names = ("L", "M", "T", "I", "Θ", "N", "J")
-        parts = "".join(f"[{n}^{v}]" for n, v in zip(names, self, strict=True))
 
         parts = ""
         for n, v in zip(names, self, strict=True):
             if v != 0:
-                parts += f"[{n}^{v}]"
+                exp = v
+                if isinstance(v, Fraction):
+                    exp = f"({v.numerator}/{v.denominator})"
+
+                parts += f"[{n}^{exp}]"
 
         return parts
 
@@ -97,7 +117,7 @@ def dim_mul(a: DimLike, b: DimLike) -> Dimension:
 def dim_div(a: DimLike, b: DimLike) -> Dimension:
     return Dimension(a) / b
 
-def dim_pow(a: DimLike, n: int) -> Dimension:
+def dim_pow(a: DimLike, n: int | float | Fraction) -> Dimension:
     return Dimension(a) ** n
 
 # --- Public constants (identical names, now Dimension instances) ------------

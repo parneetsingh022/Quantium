@@ -25,6 +25,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isclose, isfinite
 from typing import Union
+from fractions import Fraction
+from quantium.core.utils import rationalize
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
 from quantium.core.unit_simplifier import SymbolComponents, UnitNameSimplifier
@@ -156,7 +158,11 @@ class Unit:
         return Unit(new_name, new_scale, new_dim)
         
 
-    def __pow__(self, n: int) -> Unit:
+    def __pow__(self, n: int | float | Fraction) -> Unit:
+        
+        if isinstance(n, float):
+            n = rationalize(n)
+
         new_dim = dim_pow(self.dim, n)
         # Canonical naming:
         if n == 0:
