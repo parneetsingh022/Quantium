@@ -448,11 +448,15 @@ def rationalize(value : int | float, *, as_fraction : bool = False, max_denomina
     return frac.numerator if frac.denominator == 1 else frac
 
 
-def simplify_fraction(x: Fraction | int) -> int | Fraction:
+def simplify_fraction(x: Fraction | int | float) -> int | Fraction:
     """Return an int if the fraction is an exact integer, otherwise the reduced Fraction."""
     if isinstance(x, Fraction):
         # reduce() is automatic; just check denominator
         if x.denominator == 1:
             return x.numerator
         return x
-    return x  # ints or floats are returned unchanged
+    
+    if(isinstance(x, float)):
+        x = rationalize(x)
+        
+    return x

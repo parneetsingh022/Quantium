@@ -359,11 +359,11 @@ def test_pass_through_int_and_float():
     assert utils.simplify_fraction(5) == 5
     assert isinstance(utils.simplify_fraction(5), int)
 
-    # Function is specified to return floats unchanged
+    # Function is specified to return floats as Fractions
     val = 1.5
     out = utils.simplify_fraction(val)
     assert out == val
-    assert isinstance(out, float)
+    assert isinstance(out, Fraction)
 
 def test_idempotence_on_fraction():
     f = Fraction(9, 6)  # reduces to 3/2 internally
@@ -376,4 +376,9 @@ def test_sign_handling():
     # Sign should be on numerator; reduction should still yield integer
     assert utils.simplify_fraction(Fraction(-10, -5)) == 2
     assert utils.simplify_fraction(Fraction(10, -5)) == -2
+
+def test_simplify_fraction_with_float():
+    result = utils.simplify_fraction(0.5)
+    assert isinstance(result, Fraction)
+    assert result == Fraction(1, 2)
 
