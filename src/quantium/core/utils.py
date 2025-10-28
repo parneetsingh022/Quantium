@@ -237,7 +237,7 @@ def _parse_exponent(m: re.Match[str]) -> int:
     return 1
 
 
-def _tokenize_name_merge(name: str) -> Dict[str, int]:
+def _tokenize_name_merge(name: str) -> Dict[str, Fraction]:
     """Merge exponents from a composed unit name; cancel identical symbols.
 
     Correctly handles sequences like 'cm/ms^3·ms' as (cm / ms^3) · ms.
@@ -245,13 +245,22 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
     if not name or name == "1":
         return {}
 
+    exp_placeholders: Dict[str, str] = {}
+
+    def _protect_exp(match: re.Match[str]) -> str:
+        idx = len(exp_placeholders)
+        key = f"__EXP{idx}__"
+        exp_placeholders[key] = match.group(1)
+        return f"^{key}"
+
+    name = name.replace("**", "^")
+    name = re.sub(r"\^\(([^()]+)\)", _protect_exp, name)
     name = _expand_parentheses(name)
-    # Normalize ASCII separators
     name = name.replace("*", "·")
 
     parts = re.split(r"([·/])", name)  # keep separators
     op = "·"  # last operator seen; '·' or '/'
-    exps: Dict[str, int] = {}
+    exps: Dict[str, Fraction] = {}
 
     for tok in parts:
         if not tok:
@@ -259,27 +268,36 @@ def _tokenize_name_merge(name: str) -> Dict[str, int]:
         if tok in ("·", "/"):
             op = tok
             continue
+        tok = tok.strip()
         if tok == "1":
             op = "·"
             continue
+
+        for key, value in exp_placeholders.items():
+            if key in tok:
+                tok = tok.replace(key, f"({value})")
 
         m = _TOKEN_RE.fullmatch(tok)
         if m:
             sym = m.group("sym")
             e = _parse_exponent(m)
         else:
-            sym, e = tok, 1
+            sym, e = tok, Fraction(1, 1)
 
         # Apply operator to THIS token only
         if op == "/":
             e = -e
-        exps[sym] = exps.get(sym, 0) + e
+
+        total = exps.get(sym, Fraction(0, 1)) + e
+        if total == 0:
+            exps.pop(sym, None)
+        else:
+            exps[sym] = total
 
         # Reset to multiply for the next token
         op = "·"
 
-    # Drop zeros
-    return {k: v for k, v in exps.items() if v != 0}
+    return exps
 
 
 def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
@@ -297,17 +315,28 @@ def prettify_unit_name_supers(name: str, *, cancel: bool = True) -> str:
 
     exps = _tokenize_name_merge(name)
 
-    num: List[Tuple[str, int]] = sorted(
+    num: List[Tuple[str, Fraction]] = sorted(
         [(s, e) for s, e in exps.items() if e > 0], key=lambda x: x[0]
     )
-    den: List[Tuple[str, int]] = sorted(
+    den: List[Tuple[str, Fraction]] = sorted(
         [(s, -e) for s, e in exps.items() if e < 0], key=lambda x: x[0]
     )
 
-    def join(parts: List[Tuple[str, int]]) -> str:
+    def _fmt(sym: str, power: Fraction) -> str:
+        abs_power = abs(power)
+        if abs_power == 1:
+            return sym
+        if abs_power.denominator == 1:
+            numer = abs_power.numerator
+            if 0 < numer < 10:
+                return f"{sym}{_sup(numer)}"
+            return f"{sym}^{numer}"
+        return f"{sym}^({abs_power.numerator}/{abs_power.denominator})"
+
+    def join(parts: List[Tuple[str, Fraction]]) -> str:
         if not parts:
             return "1"
-        return "·".join(f"{s}{_sup(p)}" for s, p in parts)
+        return "·".join(_fmt(s, p) for s, p in parts)
 
     num_s = join(num)
     den_s = join(den)
