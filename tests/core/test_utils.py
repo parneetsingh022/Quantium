@@ -317,5 +317,63 @@ def test_max_denominator_does_not_force_acceptance():
     with pytest.raises(ValueError):
         utils.rationalize(0.142857, max_denominator=10_000)
 
+#############################################
+# simplify_fraction function test
+#############################################
 
+def test_reduces_to_int_simple():
+    assert utils.simplify_fraction(Fraction(4, 2)) == 2
+    assert isinstance(utils.simplify_fraction(Fraction(4, 2)), int)
+
+def test_reduces_to_int_zero():
+    # Any zero Fraction reduces to 0/1
+    assert utils.simplify_fraction(Fraction(0, 5)) == 0
+    assert isinstance(utils.simplify_fraction(Fraction(0, 5)), int)
+
+def test_reduces_to_int_negative():
+    assert utils.simplify_fraction(Fraction(-6, 3)) == -2
+    assert isinstance(utils.simplify_fraction(Fraction(-6, 3)), int)
+
+def test_keeps_fraction_when_not_integer():
+    out = utils.simplify_fraction(Fraction(3, 2))
+    assert out == Fraction(3, 2)
+    assert isinstance(out, Fraction)
+
+def test_keeps_already_reduced_fraction_when_not_integer():
+    out = utils.simplify_fraction(Fraction(7, 5))
+    assert out == Fraction(7, 5)
+    assert isinstance(out, Fraction)
+
+def test_large_values():
+    # 1000000/250000 reduces to 4 -> int
+    out_int = utils.simplify_fraction(Fraction(1_000_000, 250_000))
+    assert out_int == 4
+    assert isinstance(out_int, int)
+
+    # Non-integer large fraction stays Fraction
+    out_frac = utils.simplify_fraction(Fraction(1_000_001, 250_000))
+    assert out_frac == Fraction(1_000_001, 250_000)
+    assert isinstance(out_frac, Fraction)
+
+def test_pass_through_int_and_float():
+    assert utils.simplify_fraction(5) == 5
+    assert isinstance(utils.simplify_fraction(5), int)
+
+    # Function is specified to return floats unchanged
+    val = 1.5
+    out = utils.simplify_fraction(val)
+    assert out == val
+    assert isinstance(out, float)
+
+def test_idempotence_on_fraction():
+    f = Fraction(9, 6)  # reduces to 3/2 internally
+    first = utils.simplify_fraction(f)     # -> Fraction(3, 2)
+    second = utils.simplify_fraction(first)
+    assert first == Fraction(3, 2)
+    assert second == Fraction(3, 2)  # calling again doesn’t change result
+
+def test_sign_handling():
+    # Sign should be on numerator; reduction should still yield integer
+    assert utils.simplify_fraction(Fraction(-10, -5)) == 2
+    assert utils.simplify_fraction(Fraction(10, -5)) == -2
 

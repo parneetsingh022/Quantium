@@ -1,4 +1,6 @@
 import pytest
+from fractions import Fraction
+import math
 
 # If your file lives at src/quantium/units/dimensions.py, this import will work:
 from quantium.core.dimensions import (
@@ -16,6 +18,8 @@ from quantium.core.dimensions import (
     dim_pow,
     Dimension
 )
+
+
 
 # --- Basic structure & base vectors -------------------------------------------------
 
@@ -182,11 +186,37 @@ def test_dimension_rejects_wrong_length():
     with pytest.raises(ValueError):
         Dimension((1,2,3))  # not 7
 
-def test_dimension_rejects_non_int_exponent_for_pow():
-    d = Dimension((1,0,0,0,0,0,0))
-    with pytest.raises(TypeError):
-        _ = d ** 2.5
+def test_dimension_allows_fractional_and_int_powers():
+    d = Dimension((1, 0, 0, 0, 0, 0, 0))
+    
+    # Integer exponent
+    result_int = d ** 2
+    assert isinstance(result_int, Dimension)
+    
+    # Fraction exponent (explicit)
+    result_frac = d ** Fraction(1, 2)
+    assert isinstance(result_frac, Dimension)
+    
+    # Rational float exponent (e.g., 0.5)
+    result_float = d ** 0.5
+    assert isinstance(result_float, Dimension)
 
+
+def test_dimension_rejects_invalid_exponent_types():
+    d = Dimension((1, 0, 0, 0, 0, 0, 0))
+    
+    for bad in ["2", [2], (2,), None, complex(1, 1)]:
+        with pytest.raises(TypeError):
+            _ = d ** bad
+
+
+def test_dimension_rejects_irrational_float_exponents():
+    d = Dimension((1, 0, 0, 0, 0, 0, 0))
+    
+    # irrational like pi or sqrt(2)
+    for bad in [math.pi, math.sqrt(2)]:
+        with pytest.raises(ValueError):
+            _ = d ** bad
 def test_operator_algebraic_laws():
     # (ab)^n = a^n b^n
     a, b, n = LENGTH, TIME, 3
