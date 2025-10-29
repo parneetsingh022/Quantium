@@ -21,7 +21,7 @@
   <a href="https://quantium.readthedocs.io/en/latest/">
     <img src="https://readthedocs.org/projects/quantium/badge/?version=latest" alt="Documentation Status">
   </a>
-  <a href="https://github.com/YOUR_USERNAME/YOUR_REPONAME/actions">
+  <a href="https://github.com/parneetsingh022/quantium/actions">
     <img src="https://github.com/parneetsingh022/quantium/actions/workflows/ci.yml/badge.svg" alt="Build Status">
   </a>
   <a href="http://mypy-lang.org/">
