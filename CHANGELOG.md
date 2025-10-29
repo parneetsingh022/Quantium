@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2025-10-25
 
 ### Added
-- Added Python 3.13 and 3.14 classifiers to `pyproject.toml` for up-to-date Python version metadata. [#86]
+- Added Python 3.13 and 3.14 classifiers to `pyproject.toml` for up-to-date Python version metadata. Thanks [@OnatadeTobi](https://github.com/OnatadeTobi) for contribution. [#86]
 
 ### Fixed
 - Prevented registration or aliasing of unit names that conflict with existing `UnitNamespace` attributes or methods (e.g., `define`, `__init__`, `_reserved_names`), ensuring consistent and unambiguous behavior when defining units. [#69]
