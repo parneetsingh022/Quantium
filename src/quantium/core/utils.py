@@ -269,9 +269,47 @@ def _parse_exponent(m: re.Match[str]) -> Fraction:
 
 
 def _tokenize_name_merge(name: str) -> Dict[str, Fraction]:
-    """Merge exponents from a composed unit name; cancel identical symbols.
+    """
+    Parse and normalize a multiplicative expression into a dictionary of symbols and exponents.
 
-    Correctly handles sequences like 'cm/ms^3·ms' as (cm / ms^3) · ms.
+    This function interprets a symbolic expression (typically representing units or variables)
+    containing multiplication, division, and exponents, and merges duplicate symbols by summing
+    their exponents. Division applies negative exponents. The output is a canonical representation
+    of the input expression as a mapping from symbol names to fractional exponents.
+
+    Examples
+    --------
+    >>> _tokenize_name_merge("A*B^2/C")
+    {'A': Fraction(1, 1), 'B': Fraction(2, 1), 'C': Fraction(-1, 1)}
+
+    >>> _tokenize_name_merge("kg/(m*s^2)")
+    {'kg': Fraction(1, 1), 'm': Fraction(-1, 1), 's': Fraction(-2, 1)}
+
+    >>> _tokenize_name_merge("(x*y)^2 / x")
+    {'x': Fraction(1, 1), 'y': Fraction(2, 1)}
+
+    Parameters
+    ----------
+    name : str
+        A multiplicative expression string composed of symbols and operators:
+        - Multiplication: `*` or `·`
+        - Division: `/`
+        - Exponentiation: `^` or `**`
+        Parentheses may be used for grouping, and exponents can be integers or fractions.
+
+    Returns
+    -------
+    Dict[str, Fraction]
+        A mapping from symbol names to their net exponents as `Fraction` objects.
+
+    Notes
+    -----
+    - Empty strings or "1" return an empty dictionary.
+    - Exponents protected within parentheses (e.g., `^(a+b)`) are temporarily replaced with
+      placeholders to avoid interference during parentheses expansion.
+    - Intermediate helpers `_expand_parentheses`, `_TOKEN_RE`, and `_parse_exponent` are used
+      to handle nested expressions and exponent parsing.
+
     """
     if not name or name == "1":
         return {}
