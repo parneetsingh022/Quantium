@@ -183,6 +183,49 @@ class UnitNameSimplifier:
 
     @staticmethod
     def combine_symbol_maps(*maps: SymbolComponents) -> SymbolComponents:
+        """
+        Combine multiple symbol-to-exponent mappings into a single consolidated map.
+
+        This function merges several unit symbol maps (as produced by `unit_symbol_map`)
+        by summing the exponents of matching symbols, removing any symbols whose total
+        exponent becomes zero, and retaining the symbol entry with the lowest
+        `(priority, index)` ordering when duplicates occur.
+
+        The resulting mapping represents the algebraic combination of multiple unit
+        expressions (e.g., multiplication or division of compound units).
+
+        Examples
+        --------
+        >>> map1 = {'m': (Fraction(1), (0, 0)), 's': (Fraction(-2), (0, 1))}
+        >>> map2 = {'s': (Fraction(2), (1, 0)), 'kg': (Fraction(1), (1, 1))}
+        >>> Unit.combine_symbol_maps(map1, map2)
+        {'m': (Fraction(1, 1), (0, 0)), 'kg': (Fraction(1, 1), (1, 1))}
+
+        Parameters
+        ----------
+        *maps : SymbolComponents
+            One or more symbol-to-exponent mappings. Each mapping associates a symbol
+            (string) with a tuple `(Fraction(exponent), (priority, index))`.
+
+        Returns
+        -------
+        SymbolComponents
+            A merged mapping where:
+            - Exponents of matching symbols are summed.
+            - Symbols with a total exponent of zero are removed.
+            - For symbols present in multiple maps, the smallest `(priority, index)`
+            tuple is retained to preserve preferred ordering and precedence.
+
+        Notes
+        -----
+        - `priority` values determine precedence between symbols originating from
+        different sources (lower values take precedence).
+        - `index` values preserve the order of symbols as they appear in the
+        original unit definitions.
+        - This method is typically used to combine units during multiplication,
+        division, or simplification.
+
+        """
         combined: SymbolComponents = {}
         for mapping in maps:
             for symbol, (exponent, order) in mapping.items():
@@ -346,172 +389,157 @@ class UnitNameSimplifier:
         """Convert an SI magnitude into a value/unit tuple using canonical units."""
         unit_cls = self._unit_cls
 
-        if dim == DIM_0:
-            unit = unit_cls("", 1.0, DIM_0)
-            return mag_si / unit.scale_to_si, unit
-
-        def _should_preserve(name: str) -> bool:
+        # ---------- tiny helpers (pure, behavior-preserving) ----------
+        def _is_simple(name: str) -> bool:
             return not any(ch in name for ch in ("*", "/", "^", "·"))
 
-        if requested_unit is not None and _should_preserve(requested_unit.name):
-            return mag_si / requested_unit.scale_to_si, requested_unit
+        def _score_value(v: float) -> tuple[int, float]:
+            # tier 0: value in [1, 1000), minimize |log10(v)|; else tier 1
+            if v == 0.0:
+                return (0, 0.0)
+            a = abs(v)
+            if 1.0 <= a < 1000.0:
+                return (0, abs(math.log10(a)))
+            return (1, abs(math.log10(a)))
 
+        def _best(candidates: list[tuple[float, "Unit"]]) -> tuple[float, "Unit"]:
+            return min(candidates, key=lambda t: _score_value(t[0]))
+
+        def _registry_get(symbol: str) -> "Unit | None":
+            from quantium.units.registry import DEFAULT_REGISTRY
+            try:
+                return DEFAULT_REGISTRY.get(symbol)
+            except ValueError:
+                return None
+
+        def _allowed_prefixes():
+            from quantium.units.registry import PREFIXES
+            return [p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS]
+
+        def _value_for(unit: "Unit") -> float:
+            return mag_si / unit.scale_to_si
+
+        # Build prefixed candidates around a base symbol, optionally raise to -1.
+        def _prefixed_candidates_for_symbol(sym: str, invert: bool = False) -> list[tuple[float, "Unit"]]:
+            base = _registry_get(sym)
+            if base is None or base.scale_to_si <= 0:
+                return []
+            cands: list[tuple[float, "Unit"]] = [(_value_for(base if not invert else (base ** -1)), base if not invert else (base ** -1))]
+            for p in _allowed_prefixes():
+                u = _registry_get(f"{p.symbol}{sym}")
+                if u is None:
+                    continue
+                u = u if not invert else (u ** -1)
+                cands.append((_value_for(u), u))
+            return cands
+
+        # Collapse components if all resolve to same dimension and total exponent != 0
+        def _collapse_same_dim_components(ordered: list[tuple[str, Fraction, tuple[int, int]]]) -> tuple[float, "Unit"] | None:
+            # ordered: [(symbol, exponent, order)]
+            component_candidates: list[tuple[str, Fraction, "Unit", tuple[int, int]]] = []
+            total_exp = Fraction(0, 1)
+            reference_dim: Dim | None = None
+            for sym, exp, ordt in ordered:
+                u = _registry_get(sym)
+                if u is None:
+                    return None
+                if reference_dim is None:
+                    reference_dim = u.dim
+                elif u.dim != reference_dim:
+                    return None
+                component_candidates.append((sym, exp, u, ordt))
+                total_exp += exp
+
+            if not component_candidates or total_exp == 0:
+                return None
+
+            def _pick_key(entry: tuple[str, Fraction, "Unit", tuple[int, int]]) -> tuple[Fraction, int, int]:
+                _, exp, _, ordt = entry
+                return (abs(exp), -ordt[0], -ordt[1])
+
+            _, _, ref_u, _ = max(component_candidates, key=_pick_key)
+            canonical = ref_u ** total_exp
+            if canonical.dim == dim:
+                return _value_for(canonical), canonical
+            return None
+
+        # Try preferred symbol/power collapse on a composite unit, respecting “only if referenced”
+        def _preferred_collapse_from_components(comp: "Unit", comps: SymbolComponents) -> tuple[float, "Unit"] | None:
+            from quantium.core.utils import preferred_symbol_for_dim
+            match = self._match_preferred_power(dim)
+            if match:
+                base_sym, power = match
+                if base_sym in comps:  # only if user referenced this symbol
+                    base_unit = _registry_get(base_sym)
+                    if base_unit is not None:
+                        candidate = base_unit ** power
+                        return _value_for(candidate), candidate
+
+            pref_sym = preferred_symbol_for_dim(dim)
+            if pref_sym and dim != DIM_0:
+                cands = _prefixed_candidates_for_symbol(pref_sym, invert=False)
+                if cands:
+                    return _best(cands)
+            return _value_for(comp), comp
+
+        # Single-axis path: choose axis symbol, maybe pick prefixes around preferred symbol
+        def _single_axis_path(target_exp: int, chosen: "Unit" | None) -> tuple[float, "Unit"] | None:
+            if chosen is None:
+                return None
+            final_unit = chosen ** target_exp
+
+            # Only attempt prefix optimization when not forced by requested_unit and |exp| == 1,
+            # and when the chosen symbol equals the dimension's preferred symbol.
+            if requested_unit is None and abs(target_exp) == 1:
+                from quantium.core.utils import preferred_symbol_for_dim
+                pref_sym = preferred_symbol_for_dim(dim)
+                if pref_sym and final_unit.name == pref_sym and dim != DIM_0:
+                    invert = (target_exp == -1)
+                    cands = [(_value_for(final_unit), final_unit)]
+                    cands += _prefixed_candidates_for_symbol(pref_sym, invert=invert)
+                    return _best(cands)
+            return _value_for(final_unit), final_unit
+
+        # ---------- main logic ----------
+
+        # 1) Dimensionless fast-path
+        if dim == DIM_0:
+            unit = unit_cls("", 1.0, DIM_0)
+            return _value_for(unit), unit
+
+        # 2) Honor a simple requested unit (no operators)
+        if requested_unit is not None and _is_simple(requested_unit.name):
+            return _value_for(requested_unit), requested_unit
+
+        # 3) Component-driven logic
         if components:
+            # 3a) Single-axis shortcut
             single_axis = self._dim_single_axis(dim)
             if single_axis is not None:
                 axis_idx, target_exp = single_axis
                 chosen = self._choose_symbol_for_axis(components, axis_idx, target_exp)
-                if chosen is not None:
-                    final_unit = chosen ** target_exp
+                got = _single_axis_path(target_exp, chosen)
+                if got is not None:
+                    return got
 
-                    if requested_unit is None and abs(target_exp) == 1:
-                        from quantium.core.utils import preferred_symbol_for_dim
-                        from quantium.units.registry import DEFAULT_REGISTRY, PREFIXES
-
-                        pref_sym = preferred_symbol_for_dim(dim)
-                        if pref_sym and final_unit.name == pref_sym and dim != DIM_0:
-                            allowed_prefixes = [
-                                p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS
-                            ]
-
-                            prefix_candidates: list[tuple[float, "Unit"]] = []
-
-                            base_value = mag_si / final_unit.scale_to_si
-                            prefix_candidates.append((base_value, final_unit))
-
-                            for prefix in allowed_prefixes:
-                                symbol = f"{prefix.symbol}{pref_sym}"
-                                try:
-                                    candidate_unit = DEFAULT_REGISTRY.get(symbol)
-                                except ValueError:
-                                    continue
-                                if target_exp == -1:
-                                    candidate_unit = candidate_unit ** -1
-                                candidate_value = mag_si / candidate_unit.scale_to_si
-                                prefix_candidates.append((candidate_value, candidate_unit))
-
-                            def _score(entry: tuple[float, "Unit"]) -> tuple[int, float]:
-                                value, _ = entry
-                                if value == 0.0:
-                                    return (0, 0.0)
-                                abs_val = abs(value)
-                                if 1.0 <= abs_val < 1000.0:
-                                    return (0, abs(math.log10(abs_val)))
-                                return (1, abs(math.log10(abs_val)))
-
-                            best_value, best_unit = min(prefix_candidates, key=_score)
-                            return best_value, best_unit
-
-                    return mag_si / final_unit.scale_to_si, final_unit
-
-            from quantium.units.registry import DEFAULT_REGISTRY
-
+            # 3b) Same-dimension components collapse
             ordered_components = sorted(
-                (
-                    (symbol, exponent, order)
-                    for symbol, (exponent, order) in components.items()
-                    if exponent
-                ),
+                ((sym, exp, order) for sym, (exp, order) in components.items() if exp),
                 key=lambda item: item[2],
             )
-
             if ordered_components:
-                component_candidates: list[tuple[str, Fraction, "Unit", tuple[int, int]]] = []
-                total_exp = Fraction(0, 1)
-                all_same_dim = True
-                reference_dim: Dim | None = None
+                collapsed = _collapse_same_dim_components(ordered_components)
+                if collapsed is not None:
+                    return collapsed
 
-                for symbol, exponent, order in ordered_components:
-                    try:
-                        candidate_unit = DEFAULT_REGISTRY.get(symbol)
-                    except ValueError:
-                        all_same_dim = False
-                        break
-
-                    if reference_dim is None:
-                        reference_dim = candidate_unit.dim
-                    elif candidate_unit.dim != reference_dim:
-                        all_same_dim = False
-                        break
-
-                    component_candidates.append((symbol, exponent, candidate_unit, order))
-                    total_exp += exponent
-
-                if all_same_dim and component_candidates and total_exp != 0:
-                    def _pick_key(entry: tuple[str, Fraction, "Unit", tuple[int, int]]) -> tuple[Fraction, int, int]:
-                        _, exp, _, ordt = entry
-                        return (abs(exp), -ordt[0], -ordt[1])
-
-                    best = max(component_candidates, key=_pick_key)
-                    _, _, reference_unit, _ = best
-                    canonical_unit = reference_unit ** total_exp
-                    if canonical_unit.dim == dim:
-                        return mag_si / canonical_unit.scale_to_si, canonical_unit
-
+            # 3c) Composite fallback + preferred symbol/prefix pass
             composite = self._unit_from_components(components)
             if composite is not None and composite.dim == dim:
-                from quantium.core.utils import preferred_symbol_for_dim
-                from quantium.units.registry import DEFAULT_REGISTRY, PREFIXES
+                return _preferred_collapse_from_components(composite, components)
 
-                match = self._match_preferred_power(dim)
-                if match:
-                    base_sym, power = match
-                    # Only collapse to the matched power if the base symbol was
-                    # part of the originating expression; this avoids turning
-                    # ``V/A`` into ``S^-1`` and similar cases where the user
-                    # never referenced the preferred base symbol directly.
-                    if base_sym in (components or {}):
-                        try:
-                            base_unit = DEFAULT_REGISTRY.get(base_sym)
-                        except ValueError:
-                            base_unit = None
-
-                        if base_unit is not None:
-                            canonical_unit = base_unit ** power
-                            return mag_si / canonical_unit.scale_to_si, canonical_unit
-
-                pref_sym = preferred_symbol_for_dim(dim)
-                if pref_sym and dim != DIM_0:
-                    try:
-                        pref_unit = DEFAULT_REGISTRY.get(pref_sym)
-                    except ValueError:
-                        pref_unit = None
-
-                    if pref_unit is not None and pref_unit.scale_to_si > 0:
-                        allowed_prefixes = [
-                            p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS
-                        ]
-
-                        preferred_candidates: list[tuple[float, "Unit"]] = []
-
-                        base_value = mag_si / pref_unit.scale_to_si
-                        preferred_candidates.append((base_value, pref_unit))
-
-                        for prefix in allowed_prefixes:
-                            symbol = f"{prefix.symbol}{pref_sym}"
-                            try:
-                                candidate_unit = DEFAULT_REGISTRY.get(symbol)
-                            except ValueError:
-                                continue
-                            candidate_value = mag_si / candidate_unit.scale_to_si
-                            preferred_candidates.append((candidate_value, candidate_unit))
-
-                        def _score(entry: tuple[float, "Unit"]) -> tuple[int, float]:
-                            value, _ = entry
-                            if value == 0.0:
-                                return (0, 0.0)
-                            abs_val = abs(value)
-                            if 1.0 <= abs_val < 1000.0:
-                                return (0, abs(math.log10(abs_val)))
-                            return (1, abs(math.log10(abs_val)))
-
-                        best_value, best_unit = min(preferred_candidates, key=_score)
-                        return best_value, best_unit
-
-                return mag_si / composite.scale_to_si, composite
-
+        # 4) Final fallback: canonical unit for the dimension
         unit = self.canonical_unit_for_dim(dim)
-        return mag_si / unit.scale_to_si, unit
+        return _value_for(unit), unit
 
 
 __all__ = ["SymbolComponents", "UnitNameSimplifier"]

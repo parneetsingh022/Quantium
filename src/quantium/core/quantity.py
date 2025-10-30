@@ -411,10 +411,15 @@ class Quantity:
         if isinstance(other, Unit):
             result_mag_si = self._mag_si * other.scale_to_si
             result_dim = dim_mul(self.dim, other.dim)
+
+            # Merge the symbol–exponent maps of self (priority 0) and other (priority 1) 
+            # into a combined unit representation
             components = UNIT_SIMPLIFIER.combine_symbol_maps(
                 self._symbol_component_map(0),
                 UNIT_SIMPLIFIER.unit_symbol_map(other, 1),
             )
+
+            
             value, unit = UNIT_SIMPLIFIER.si_to_value_unit(result_mag_si, result_dim, components)
             return Quantity(value, unit)
         
