@@ -112,6 +112,51 @@ class UnitNameSimplifier:
     # Symbol component utilities
     # ------------------------------------------------------------------
     def unit_symbol_map(self, unit: "Unit", priority: int = 0) -> SymbolComponents:
+        """
+        Create a mapping from unit symbols to their exponents and metadata.
+
+        This function parses a unit's name into its component symbols and associates each
+        with its corresponding exponent (as a `Fraction`) and a tuple of metadata
+        `(priority, index)`. The mapping helps represent compound units (e.g., `kg·m^2/s^3`)
+        in a structured form that can be used for comparison, simplification, or serialization.
+
+        Examples
+        --------
+        >>> unit_symbol_map(Unit("kg*m^2/s^3"))
+        {
+            'kg': (Fraction(1, 1), (0, 0)),
+            'm': (Fraction(2, 1), (0, 1)),
+            's': (Fraction(-3, 1), (0, 2))
+        }
+
+        >>> unit_symbol_map(Unit("N"), priority=1)
+        {'N': (Fraction(1, 1), (1, 0))}
+
+        Parameters
+        ----------
+        unit : Unit
+            A `Unit` object whose `name` attribute contains the symbolic representation
+            of the unit (e.g., `"kg*m^2/s^3"`).
+        priority : int, optional
+            A priority value that is stored alongside each symbol to indicate
+            its relative importance or origin (default is 0).
+
+        Returns
+        -------
+        SymbolComponents
+            A dictionary mapping each symbol string to a tuple:
+            `(Fraction(exponent), (priority, index))`, where:
+            - `exponent` is the unit’s power as a `Fraction`
+            - `priority` is the given priority value
+            - `index` is the order of appearance in the unit string
+
+        Notes
+        -----
+        - If the unit has no `name`, an empty dictionary is returned.
+        - If `_tokenize_name_merge` finds no valid symbols, the entire unit name is treated
+        as a single symbol with exponent 1.
+
+        """
         if not unit.name:
             return {}
 
