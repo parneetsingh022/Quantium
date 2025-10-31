@@ -27,8 +27,8 @@ from quantium.core.quantity import Unit
 
 # We import the module under test once, and access internals we intentionally
 # rely on in tests (like _bootstrap_default_registry).
-import quantium.units.registry as regmod
-from quantium.units.registry import UnitsRegistry, UnitNamespace
+import quantium.catalog.registry as regmod
+from quantium.catalog.registry import UnitsRegistry, UnitNamespace
 
 # ---------------------------------------------------------------------------
 # Fixtures

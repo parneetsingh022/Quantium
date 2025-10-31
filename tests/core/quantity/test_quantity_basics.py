@@ -2,7 +2,7 @@ import math
 import pytest
 from quantium.core.dimensions import LENGTH, TEMPERATURE,TIME, DIM_0
 from quantium.core.quantity import Quantity, Unit
-from quantium.units.registry import DEFAULT_REGISTRY as dreg
+from quantium.catalog.registry import DEFAULT_REGISTRY as dreg
 from quantium import u
 # -------------------------------
 # Quantity: basics & conversion

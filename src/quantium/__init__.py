@@ -9,7 +9,7 @@ are imported lazily to avoid import-time side effects and circular imports.
 
 from importlib import metadata as _metadata
 from typing import Any
-from quantium.units.registry import UnitsRegistry
+from quantium.catalog.registry import UnitsRegistry
 
 __author__ = "Parneet Sidhu"
 __license__ = "MIT"
@@ -29,7 +29,7 @@ __all__ = ["__version__", "__author__", "__license__", "u"]
 
 def _get_default_registry() -> UnitsRegistry:
     # Import here to avoid import-time side-effects / circular imports.
-    from .units.registry import DEFAULT_REGISTRY  # local import
+    from .catalog.registry import DEFAULT_REGISTRY  # local import
     return DEFAULT_REGISTRY
 
 def __getattr__(name: str) -> Any:

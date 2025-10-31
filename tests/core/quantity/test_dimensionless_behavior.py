@@ -2,7 +2,7 @@ import pytest
 
 from quantium.core.dimensions import DIM_0
 from quantium.core.quantity import Quantity
-from quantium.units.registry import DEFAULT_REGISTRY as ureg
+from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
 
 @pytest.mark.regression(reason="Issue #3: Verify all units produce dimensionless result when divided by themselves")

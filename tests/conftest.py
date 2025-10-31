@@ -1,6 +1,6 @@
 # tests/conftest.py
 import pytest
-from quantium.units.registry import DEFAULT_REGISTRY as _ureg
+from quantium.catalog.registry import DEFAULT_REGISTRY as _ureg
 
 
 

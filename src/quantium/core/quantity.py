@@ -30,7 +30,7 @@ from quantium.core.utils import rationalize
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
 from quantium.core.unit_simplifier import SymbolComponents, UnitNameSimplifier
-from quantium.units.parser import extract_unit_expr
+from quantium.catalog.parser import extract_unit_expr
 
 Number = Union[int, float]
 
@@ -314,7 +314,7 @@ class Quantity:
 
     def to(self, new_unit: "Unit|str") -> Quantity:
         if(isinstance(new_unit, str)):
-            from quantium.units.registry import DEFAULT_REGISTRY
+            from quantium.catalog.registry import DEFAULT_REGISTRY
             new_unit = extract_unit_expr(new_unit, DEFAULT_REGISTRY)
         
         # This proves to mypy that new_unit is a Unit, not a str.
@@ -355,7 +355,7 @@ class Quantity:
         """
         # Local imports avoid circular import at module load time.
         from quantium.core.utils import format_dim, preferred_symbol_for_dim
-        from quantium.units.registry import DEFAULT_REGISTRY as _ureg
+        from quantium.catalog.registry import DEFAULT_REGISTRY as _ureg
 
         cur_name = self.unit.name
 
@@ -483,7 +483,7 @@ class Quantity:
             preferred_symbol_for_dim,
             prettify_unit_name_supers,
         )
-        from quantium.units.registry import PREFIXES
+        from quantium.catalog.registry import PREFIXES
         from math import log10, floor  # Added import for math functions
 
         # Numeric magnitude in the *current* unit

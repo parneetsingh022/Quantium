@@ -3,7 +3,7 @@ import pytest
 
 from quantium.core.dimensions import LENGTH, MASS, TIME
 from quantium.core.quantity import Unit
-from quantium.units.registry import DEFAULT_REGISTRY as ureg
+from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 import quantium.core.utils as utils
 from quantium import u
 
@@ -69,7 +69,7 @@ def test_repr_consistent_for_equivalent_component_units(monkeypatch):
 
 def test_format_equivalents_across_units(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     cm = ureg.get("cm")
     s  = ureg.get("s")
@@ -100,7 +100,7 @@ def test_format_equivalents_across_units(monkeypatch):
 
 def test_format_si_converts_various_units(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     cm = ureg.get("cm")
     s  = ureg.get("s")
@@ -127,7 +127,7 @@ def test_format_si_converts_various_units(monkeypatch):
 
 def test_format_with_micro_and_normalization(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     # Leading 'u' maps to Greek micro 'µ' during lookup/registration
     uF = ureg.get("uF")     # normalized to µF internally
@@ -140,7 +140,7 @@ def test_format_with_micro_and_normalization(monkeypatch):
 
 def test_format_whitespace_and_case_insensitivity(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     cm = ureg.get("cm")
     s  = ureg.get("s")
@@ -154,7 +154,7 @@ def test_format_whitespace_and_case_insensitivity(monkeypatch):
 
 def test_format_dimensionless_is_numeric_only(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     # Dimensionless via equal ratio (kPa / Pa)
     kPa = ureg.get("kPa")
@@ -168,7 +168,7 @@ def test_format_dimensionless_is_numeric_only(monkeypatch):
 
 def test_format_invalid_spec_raises(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     m = ureg.get("m")
     q = 3 * m
@@ -184,7 +184,7 @@ def test_si_preserves_family_for_time_inverse_and_dose(monkeypatch):
     import quantium.core.utils as utils
     utils.invalidate_preferred_cache()
 
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     Hz = ureg.get("Hz")
     Bq = ureg.get("Bq")
@@ -221,7 +221,7 @@ def test_si_preserves_family_for_time_inverse_and_dose(monkeypatch):
 
 def test_repr_preserves_atomic_symbols_and_prefixed(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     # Atomic SI units stay unchanged
     for sym in ("Hz", "Bq", "Gy", "Sv"):
@@ -239,7 +239,7 @@ def test_repr_upgrades_only_composed_si(monkeypatch):
     import quantium.core.utils as utils
     utils.invalidate_preferred_cache()
 
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
     C = ureg.get("C")
     s = ureg.get("s")
     kg = ureg.get("kg")
@@ -261,7 +261,7 @@ def test_si_fallback_to_composed_when_no_named_symbol(monkeypatch):
     import quantium.core.utils as utils
     utils.invalidate_preferred_cache()
 
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
     cm = ureg.get("cm")
     s = ureg.get("s")
 
@@ -271,7 +271,7 @@ def test_si_fallback_to_composed_when_no_named_symbol(monkeypatch):
 
 def test_force_micro_and_kilo_newton(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     mg = ureg.get("mg")    # 1e-6 kg
     um = ureg.get("µm")    # 1e-6 m
@@ -290,7 +290,7 @@ def test_force_micro_and_kilo_newton(monkeypatch):
 
 def test_current_symbol_and_prefix(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     C  = ureg.get("C")
     s  = ureg.get("s")
@@ -313,7 +313,7 @@ def test_current_symbol_and_prefix(monkeypatch):
 
 def test_power_symbol_and_prefix(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     J  = ureg.get("J")
     s  = ureg.get("s")
@@ -336,7 +336,7 @@ def test_power_symbol_and_prefix(monkeypatch):
 
 def test_pressure_symbol_and_prefix(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     mN = ureg.get("mN")   # 1e-3 N composed from kg·m/s² but available via registry
     mm = ureg.get("mm")   # 1e-3 m
@@ -354,7 +354,7 @@ def test_pressure_symbol_and_prefix(monkeypatch):
 
 def test_reciprocal_time_units_and_manual_frequency_conversion(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     ms = ureg.get("ms")
     us = ureg.get("µs")
@@ -382,7 +382,7 @@ def test_reciprocal_time_units_and_manual_frequency_conversion(monkeypatch):
 
 def test_hz_and_bq_unit_format_and_interconversion(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     Hz = ureg.get("Hz")
     Bq = ureg.get("Bq")
@@ -406,7 +406,7 @@ def test_hz_and_bq_unit_format_and_interconversion(monkeypatch):
 
 def test_atomic_units_not_flipped(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     # Atomic SI heads should print as-is (no cross-family flip)
     for sym in ("Hz", "Bq", "Gy", "Sv", "Pa", "A", "W", "N"):
@@ -416,7 +416,7 @@ def test_atomic_units_not_flipped(monkeypatch):
 
 def test_dimensionless_prints_number(monkeypatch):
     _nop_prettifier(monkeypatch)
-    from quantium.units.registry import DEFAULT_REGISTRY as ureg
+    from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
 
     m = ureg.get("m")
     # (1 m) / (1 m) is dimensionless → bare number
