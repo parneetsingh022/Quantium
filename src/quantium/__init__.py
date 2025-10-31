@@ -9,18 +9,8 @@ are imported lazily to avoid import-time side effects and circular imports.
 
 from importlib import metadata as _metadata
 
-
 __author__ = "Parneet Sidhu"
 __license__ = "MIT"
+__version__ = _metadata.version("quantium")
 
-# Try to read the installed package version first; fall back to a default for local dev.
-try:
-    __version__ = _metadata.version("quantium")
-except _metadata.PackageNotFoundError:
-    import tomllib
-    with open("pyproject.toml", "rb") as f:
-        __version__ = tomllib.load(f)["project"]["version"]
-
-# Public names exposed by the package. Keep this minimal and stable.
 __all__ = ["__version__", "__author__", "__license__"]
-
