@@ -112,3 +112,14 @@ def test_quantity_pow_with_fractions_repr():
     q10 = 3 * u("J^(2/3)*kg^(1/3)")
     assert repr(q9) == "3 J^(2/3)·kg^(1/3)"
     assert q9 == q10
+
+@pytest.mark.parametrize("sym", [
+    "m", "J", "N", "F", "kg*m/s**2", "Pa"
+])
+def test_caret_double_asterisk_return_same_power(sym : str):
+    assert u(f'{sym}^(3/4)') == u(f'{sym}**(3/4)')
+    assert u(f'{sym}^-11') == u(f'{sym}**-11')
+    assert u(f'{sym}^-1') == u(f'{sym}**-1')
+    assert u(f'{sym}^0') == u(f'{sym}**0')
+    assert u(f'{sym}^3') == u(f'{sym}**3')
+    assert u(f'{sym}^10') == u(f'{sym}**10')
