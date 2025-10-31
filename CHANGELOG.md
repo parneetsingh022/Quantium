@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - **Unreleased**
 
+### Breaking Change
+- Removed u from the top-level namespace for clarity; update `from quantium import u` to `from quantium.units import u`.
+
 ### Added
 - Allowed raising Quantity objects to float and fractional powers, enabling operations such as `x**0.5` or `x**Fraction(1,3)`.
 

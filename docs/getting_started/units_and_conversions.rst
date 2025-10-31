@@ -11,7 +11,7 @@ You can easily convert any ``Quantity`` to a compatible unit using the ``.to()``
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     # Simple conversions
     distance = 1 * u.km
@@ -38,7 +38,7 @@ For complex or dynamically-defined units, you can pass a string expression direc
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     print(3 * u("m"))
     print(5 * u("m/s**2"))
@@ -60,7 +60,7 @@ Quantium gives you tools to look "under the hood" of an expression. You can inde
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     expr = (3 * u.kg) * (2 * u.m / u.s**2) # This is a force
 

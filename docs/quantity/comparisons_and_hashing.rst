@@ -6,7 +6,7 @@ automatically handle unit conversion.
 
 .. code-block:: python
 
-   from quantium import u
+   from quantium.units import u
 
    speed_1 = 100 * u.km / u.h
    speed_2 = 30 * u.m / u.s

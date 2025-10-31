@@ -60,7 +60,7 @@ To make sure Quantium is ready to use, open a Python shell and run:
 
 .. code-block:: python
 
-   >>> from quantium import u
+   >>> from quantium.units import u
    >>> (10 * u.kg) * (5 * u.m) / (2 * u.s**2)
    25 N
 

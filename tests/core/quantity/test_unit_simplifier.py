@@ -2,7 +2,7 @@ import pytest
 
 from quantium.core.dimensions import DIM_0, TIME, LENGTH, MASS, CURRENT, LUMINOUS, dim_div, dim_mul, dim_pow
 from quantium.core.quantity import Unit
-from quantium.core.unit_simplifier import UnitNameSimplifier
+from quantium.io.unit_simplifier import UnitNameSimplifier
 from quantium.units.registry import DEFAULT_REGISTRY
 from fractions import Fraction
 

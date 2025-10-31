@@ -8,7 +8,7 @@ from typing import Tuple, Union, Optional
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from quantium.core.quantity import Unit  # <-- Import Unit for type hints
+    from quantium.core.unit import Unit  # <-- Import Unit for type hints
     from quantium.units.registry import UnitsRegistry
 
 # --- Plan node types ------------------------------------------------
@@ -52,22 +52,18 @@ class _UnitExprParser:
                 break
         return left
 
-    # term := factor ( ('**' signed_int) | ('^' exponent) )*
+    # term := factor ( ('**' exponent) | ('^' exponent) )*
     def _parse_term(self) -> Plan:
         base = self._parse_factor()
         while True:
             self._skip_ws()
-            if self._peek('**'):
-                self._eat('**')
-                exp = self._parse_signed_int()
-                base = ("pow", base, exp)
-                continue
-            if self._peek('^'):
-                self._eat('^')
-                exp_frac = self._parse_caret_exponent()
-                base = ("pow", base, exp_frac)
-                continue
-            break
+            op = '**' if self._peek('**') else ('^' if self._peek('^') else None)
+            if not op:
+                break
+            self._eat(op)
+            #exp = Fraction(self._parse_signed_int(), 1) if op == '**' else self._parse_caret_exponent()
+            exp = self._parse_caret_exponent()
+            base = ("pow", base, exp)
         return base
 
     # factor := NAME | '(' expr ')'
@@ -186,7 +182,7 @@ def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit":  # <-- FIX: Added re
             raise ValueError(f"Unknown unit '{op1}': {e}") from None
 
     elif kind == "one":
-        from quantium.core.quantity import Unit
+        from quantium.core.unit import Unit
         from quantium.core.dimensions import DIM_0
         return Unit("1", 1.0, DIM_0)
 

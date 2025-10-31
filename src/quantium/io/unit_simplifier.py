@@ -19,7 +19,7 @@ from quantium.core.utils import _tokenize_name_merge
 from quantium.units.prefixes import Prefix
 
 if TYPE_CHECKING:  # pragma: no cover - import only used for typing
-    from quantium.core.quantity import Unit
+    from quantium.core.unit import Unit
 
 SymbolComponents = Dict[str, Tuple[Fraction, Tuple[int, int]]]
 

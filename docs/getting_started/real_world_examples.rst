@@ -14,7 +14,7 @@ Quantium supports derived physical quantities automatically. For instance, you c
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     mass = 2 * u.kg
     velocity = 3 * u.m / u.s
@@ -41,7 +41,7 @@ Units are fully preserved through complex mathematical expressions, like calcula
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     h = 12 * u.m
     g = 9.81 * (u.m / u.s**2)
@@ -72,7 +72,7 @@ Let’s compute electrical resistance from voltage and current using **Ohm's Law
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     voltage = 12 * u.V
     current = 2 * u.A
@@ -96,7 +96,7 @@ Unit safety is critical in medicine. Imagine a drug dose specified as **15 mg pe
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     patient_mass = 75 * u.kg
     dose_rate = 15 * (u.mg / u.kg)
@@ -129,7 +129,7 @@ Calculating pressure involves multiple derived units. Let's find the pressure ex
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     force = 100 * u.N
     area = 25 * u.cm**2
@@ -162,7 +162,7 @@ Output:
 
 .. .. code-block:: python
 
-..     from quantium import u
+..     from quantium.units import u
 
 ..     # Define a US gallon
 ..     u.define("gallon", 3.78541, u.L)

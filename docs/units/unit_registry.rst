@@ -16,7 +16,7 @@ Quantium provides a default registry of predefined units. This is accessed throu
 
 .. code-block:: python
 
-   from quantium import u
+   from quantium.units import u
 
    # Access units by attribute
    m = u.m      # Access the 'meter' unit
@@ -55,7 +55,7 @@ This method creates a new ``Unit`` and registers it with the default registry.
 
       .. code-block:: python
 
-         from quantium import u
+         from quantium.units import u
 
          # Define imperial length units based on the meter
          u.define("inch", 0.0254, u.m)
@@ -84,7 +84,7 @@ The unit registry can automatically synthesize units with SI prefixes (e.g., "k"
 
 .. code-block:: python
 
-   from quantium import u
+   from quantium.units import u
 
    dist_mm = 10 * u.mm  # millimeter
    cap_pf = 22 * u.pF   # picofarad

@@ -1,7 +1,7 @@
 Core Unit Class
 ================
 
-.. module:: quantium.core.quantity
+.. module:: quantium.core.unit
    :noindex:
 
 The ``Unit`` class is the foundation for all physical units in Quantium. Each ``Unit`` object

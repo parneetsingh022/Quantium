@@ -4,7 +4,7 @@ import pytest
 
 from quantium.core.dimensions import DIM_0, TIME, LENGTH, dim_div, dim_mul
 from quantium.core.quantity import Unit, Quantity
-from quantium import u
+from quantium.units import u
 
 
 # -------------------------------

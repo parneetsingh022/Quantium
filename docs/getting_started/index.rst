@@ -26,7 +26,7 @@ Let’s start with something simple: computing force using Newton’s second law
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     mass = 10 * u.kg
     acceleration = 5 * u.m / (2 * u.s**2)
@@ -50,7 +50,7 @@ Quantium's primary goal is to prevent you from performing physically invalid ope
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     try:
         invalid = (5 * u.kg) + (10 * u.m)
