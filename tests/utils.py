@@ -1,5 +1,5 @@
 # tests/utils.py
-from quantium.catalog.registry import DEFAULT_REGISTRY as _ureg
+from quantium.units.registry import DEFAULT_REGISTRY as _ureg
 
 def _nop_prettifier(monkeypatch):
     import quantium.core.utils as utils

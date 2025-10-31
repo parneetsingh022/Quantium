@@ -2,12 +2,12 @@
 import math
 import pytest
 
-from quantium.catalog.parser import (
+from quantium.units.parser import (
     _UnitExprParser,
     _compile_unit_expr,
     extract_unit_expr,
 )
-from quantium.catalog.registry import UnitsRegistry, DEFAULT_REGISTRY
+from quantium.units.registry import UnitsRegistry, DEFAULT_REGISTRY
 from quantium.core.dimensions import (
     LENGTH, TIME, MASS, CURRENT, DIM_0, dim_div, dim_mul, dim_pow
 )

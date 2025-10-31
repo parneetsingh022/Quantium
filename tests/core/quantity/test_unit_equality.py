@@ -3,7 +3,7 @@ import pytest
 
 from quantium.core.dimensions import LENGTH, TIME
 from quantium.core.quantity import Unit
-from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
+from quantium.units.registry import DEFAULT_REGISTRY as ureg
 
 
 

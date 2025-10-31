@@ -16,7 +16,7 @@ from fractions import Fraction
 
 from quantium.core.dimensions import DIM_0, Dim, dim_pow
 from quantium.core.utils import _tokenize_name_merge
-from quantium.catalog.prefixes import Prefix
+from quantium.units.prefixes import Prefix
 
 if TYPE_CHECKING:  # pragma: no cover - import only used for typing
     from quantium.core.quantity import Unit
@@ -62,7 +62,7 @@ class UnitNameSimplifier:
     def _preferred_dim_symbol_map() -> dict[tuple[int, ...], str]:
         """Builds and caches a map from dimension signatures to their preferred SI unit symbols."""
         from quantium.core.utils import preferred_symbol_for_dim
-        from quantium.catalog.registry import DEFAULT_REGISTRY
+        from quantium.units.registry import DEFAULT_REGISTRY
 
         mapping: dict[tuple[int, ...], str] = {}
         for _ , unit in DEFAULT_REGISTRY.all().items():
@@ -289,7 +289,7 @@ class UnitNameSimplifier:
         axis_idx: int,
         target_exp: Fraction,
     ) -> "Unit" | None:
-        from quantium.catalog.registry import DEFAULT_REGISTRY
+        from quantium.units.registry import DEFAULT_REGISTRY
 
         target_sign = 1 if target_exp > 0 else -1
         best: tuple[str, Fraction, "Unit"] | None = None
@@ -339,7 +339,7 @@ class UnitNameSimplifier:
         if not components:
             return None
 
-        from quantium.catalog.registry import DEFAULT_REGISTRY
+        from quantium.units.registry import DEFAULT_REGISTRY
 
         def _mul_units(units: List["Unit"]) -> "Unit" | None:
             result: "Unit" | None = None
@@ -411,14 +411,14 @@ class UnitNameSimplifier:
             return min(candidates, key=lambda t: _score_value(t[0]))
 
         def _registry_get(symbol: str) -> "Unit | None":
-            from quantium.catalog.registry import DEFAULT_REGISTRY
+            from quantium.units.registry import DEFAULT_REGISTRY
             try:
                 return DEFAULT_REGISTRY.get(symbol)
             except ValueError:
                 return None
 
         def _allowed_prefixes() -> list[Prefix]:
-            from quantium.catalog.registry import PREFIXES
+            from quantium.units.registry import PREFIXES
             return [p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS]
 
         def _value_for(unit: "Unit") -> float:

@@ -461,7 +461,7 @@ def _build_pref_map() -> Dict[Dim, str]:
     Build a dimension -> preferred symbol map from the default registry.
     Only includes units whose scale to SI is exactly 1.0.
     """
-    from quantium.catalog.registry import DEFAULT_REGISTRY
+    from quantium.units.registry import DEFAULT_REGISTRY
     pref: Dict[Dim, str] = {}
     reg: Any = DEFAULT_REGISTRY
 

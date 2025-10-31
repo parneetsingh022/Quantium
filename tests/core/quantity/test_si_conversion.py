@@ -3,7 +3,7 @@ import math
 
 from quantium.core.dimensions import LENGTH, TEMPERATURE, TIME, dim_div
 from quantium.core.quantity import Quantity, Unit
-from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
+from quantium.units.registry import DEFAULT_REGISTRY as ureg
 
 # -------------------------------
 # to_si(): preferred symbol & fallback

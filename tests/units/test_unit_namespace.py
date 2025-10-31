@@ -2,11 +2,11 @@
 
 import pytest
 
-import quantium.catalog.registry as regmod
-from quantium.catalog.registry import UnitsRegistry, UnitNamespace
+import quantium.units.registry as regmod
+from quantium.units.registry import UnitsRegistry, UnitNamespace
 from quantium.core.quantity import Unit  # your Unit class
 from quantium.core.dimensions import dim_div
-from quantium.catalog.registry import _bootstrap_default_registry
+from quantium.units.registry import _bootstrap_default_registry
 
 @pytest.fixture
 def u():
@@ -17,7 +17,7 @@ def u():
 def test_import_u_from_quantium(monkeypatch, reg):
     """Ensure `from quantium import u` works and is bound to DEFAULT_REGISTRY."""
     import importlib
-    import quantium.catalog.registry as regmod
+    import quantium.units.registry as regmod
 
     # Patch DEFAULT_REGISTRY before reload so `quantium.u` binds to it
     monkeypatch.setattr(regmod, "DEFAULT_REGISTRY", reg, raising=True)

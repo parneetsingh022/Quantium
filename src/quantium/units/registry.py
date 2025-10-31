@@ -26,7 +26,7 @@ import re
 import threading
 from typing import Dict, Iterable, Mapping, Optional, Tuple, ClassVar
 import unicodedata
-from quantium.catalog.prefixes import PREFIXES
+from quantium.units.prefixes import PREFIXES
 
 from quantium.core.dimensions import (
     AMOUNT,
@@ -42,7 +42,7 @@ from quantium.core.dimensions import (
     dim_pow,
 )
 from quantium.core.quantity import Unit
-from quantium.catalog.parser import extract_unit_expr
+from quantium.units.parser import extract_unit_expr
 
 
 

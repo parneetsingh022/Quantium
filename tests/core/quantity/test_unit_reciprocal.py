@@ -2,7 +2,7 @@ import pytest
 
 from quantium.core.dimensions import DIM_0
 
-from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
+from quantium.units.registry import DEFAULT_REGISTRY as ureg
 
 
 

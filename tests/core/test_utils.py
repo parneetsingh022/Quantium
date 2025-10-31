@@ -13,7 +13,7 @@ from quantium.core.dimensions import (
 )
 
 # Registry (used only to ensure preferred map uses real units)
-from quantium.catalog.registry import DEFAULT_REGISTRY as ureg
+from quantium.units.registry import DEFAULT_REGISTRY as ureg
 
 
 # -------------------------------
