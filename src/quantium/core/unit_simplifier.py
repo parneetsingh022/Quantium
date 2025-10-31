@@ -389,10 +389,12 @@ class UnitNameSimplifier:
         """Convert an SI magnitude into a value/unit tuple using canonical units."""
         unit_cls = self._unit_cls
 
-        # ---------- tiny helpers (pure, behavior-preserving) ----------
+        # checks if it's just a simple unit, i.e. no "*", "/", "^", "·"
         def _is_simple(name: str) -> bool:
             return not any(ch in name for ch in ("*", "/", "^", "·"))
 
+        # Assigns a ranking score to a numeric value based on how close it is to the range [1, 1000).
+        # Lower tier (0) and smaller |log10(v)| indicate a more “human-friendly” magnitude.
         def _score_value(v: float) -> tuple[int, float]:
             # tier 0: value in [1, 1000), minimize |log10(v)|; else tier 1
             if v == 0.0:
@@ -402,6 +404,8 @@ class UnitNameSimplifier:
                 return (0, abs(math.log10(a)))
             return (1, abs(math.log10(a)))
 
+        # Selects the candidate (value, unit) pair whose numeric value is most “human-friendly”
+        # — i.e., within [1, 1000) and closest to 1 on a log scale, using _score_value() as the key.
         def _best(candidates: list[tuple[float, "Unit"]]) -> tuple[float, "Unit"]:
             return min(candidates, key=lambda t: _score_value(t[0]))
 
@@ -419,7 +423,11 @@ class UnitNameSimplifier:
         def _value_for(unit: "Unit") -> float:
             return mag_si / unit.scale_to_si
 
-        # Build prefixed candidates around a base symbol, optionally raise to -1.
+        # Builds a list of (value, unit) pairs for a base symbol and its allowed metric prefixes
+        # (e.g., "m" -> "mm", "cm", "km"). If `invert=True`, generates reciprocal (1/unit) forms
+        # instead — useful for denominator units like 1/s or 1/m.
+        # Example: _prefixed_candidates_for_symbol("s", invert=True)
+        #          -> [(value_for_1/s, 1/s), (value_for_1/ms, 1/ms), (value_for_1/ks, 1/ks)]
         def _prefixed_candidates_for_symbol(sym: str, invert: bool = False) -> list[tuple[float, "Unit"]]:
             base = _registry_get(sym)
             if base is None or base.scale_to_si <= 0:
@@ -433,7 +441,13 @@ class UnitNameSimplifier:
                 cands.append((_value_for(u), u))
             return cands
 
-        # Collapse components if all resolve to same dimension and total exponent != 0
+        # Attempts to collapse components that all share the same physical dimension into a single unit
+        # by summing their exponents. It chooses the base with largest |exponent| (ties -> lower priority/index)
+        # and raises it to the total exponent; returns (value, unit) if the result matches the target `dim`.
+        # Returns None if any symbol is unknown, dimensions differ, or the summed exponent is zero.
+        # Example: ordered = [("cm", Fraction(1), (0,0)), ("m", Fraction(1), (0,1))]  # both length
+        #         -> total_exp = 2; base = "cm" (earlier in order); canonical = (cm)^2;
+        #            if target dim is L^2, returns (value_for_cm2, cm^2); otherwise None.
         def _collapse_same_dim_components(ordered: list[tuple[str, Fraction, tuple[int, int]]]) -> tuple[float, "Unit"] | None:
             # ordered: [(symbol, exponent, order)]
             component_candidates: list[tuple[str, Fraction, "Unit", tuple[int, int]]] = []
@@ -463,7 +477,11 @@ class UnitNameSimplifier:
                 return _value_for(canonical), canonical
             return None
 
-        # Try preferred symbol/power collapse on a composite unit, respecting “only if referenced”
+        # Tries to simplify a composite unit into its preferred (canonical) symbol or power form.
+        # If the dimension matches a known preferred symbol power (e.g., N·m → J), it uses that.
+        # Otherwise, it looks for a preferred base symbol and tests prefixed versions (e.g., Pa → kPa)
+        # to find a more readable unit. Falls back to the original composite if no simplification works.
+        # Example: for comp = "N·m" and dim = energy, returns (value_for_J, J) since 1 J = 1 N·m.
         def _preferred_collapse_from_components(comp: "Unit", comps: SymbolComponents) -> tuple[float, "Unit"] | None:
             from quantium.core.utils import preferred_symbol_for_dim
             match = self._match_preferred_power(dim)
@@ -482,7 +500,11 @@ class UnitNameSimplifier:
                     return _best(cands)
             return _value_for(comp), comp
 
-        # Single-axis path: choose axis symbol, maybe pick prefixes around preferred symbol
+        # Handles simple one-dimensional units (like m, s, or kg) by raising the chosen unit
+        # to the given exponent. If it's a base unit (e.g., "m" or "s") and no specific unit
+        # was requested, it also checks for better prefixed forms (like "km" or "ms")
+        # to make the value more readable.
+        # Example: chosen="m", target_exp=1 → tries m, mm, km and picks the best (e.g., 5 km instead of 5000 m)
         def _single_axis_path(target_exp: int, chosen: "Unit" | None) -> tuple[float, "Unit"] | None:
             if chosen is None:
                 return None
