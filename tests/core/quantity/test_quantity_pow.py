@@ -4,7 +4,7 @@ import pytest
 
 from quantium.core.dimensions import DIM_0, LENGTH, TEMPERATURE, dim_div, dim_mul, dim_pow
 from quantium.core.quantity import Unit
-from quantium import u
+from quantium.units import u
 
 def _name(sym: str, n: int) -> str:
     #return "1" if n == 0 else (sym if n == 1 else f"{sym}^{n}")

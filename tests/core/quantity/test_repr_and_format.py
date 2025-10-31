@@ -5,7 +5,7 @@ from quantium.core.dimensions import LENGTH, MASS, TIME
 from quantium.core.quantity import Unit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
 import quantium.core.utils as utils
-from quantium import u
+from quantium.units import u
 
 
 

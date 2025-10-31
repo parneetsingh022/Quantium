@@ -3,7 +3,7 @@ import pytest
 from quantium.core.dimensions import LENGTH, TIME
 from quantium.core.quantity import Quantity, Unit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
-from quantium import u
+from quantium.units import u
 
 # -------------------------------
 # Basic quantity equality (regressions)

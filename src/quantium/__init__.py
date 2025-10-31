@@ -8,8 +8,7 @@ are imported lazily to avoid import-time side effects and circular imports.
 """
 
 from importlib import metadata as _metadata
-from typing import Any
-from quantium.units.registry import UnitsRegistry
+
 
 __author__ = "Parneet Sidhu"
 __license__ = "MIT"
@@ -23,24 +22,5 @@ except _metadata.PackageNotFoundError:
         __version__ = tomllib.load(f)["project"]["version"]
 
 # Public names exposed by the package. Keep this minimal and stable.
-__all__ = ["__version__", "__author__", "__license__", "u"]
+__all__ = ["__version__", "__author__", "__license__"]
 
-# Lazy access helpers -------------------------------------------------------
-
-def _get_default_registry() -> UnitsRegistry:
-    # Import here to avoid import-time side-effects / circular imports.
-    from .units.registry import DEFAULT_REGISTRY  # local import
-    return DEFAULT_REGISTRY
-
-def __getattr__(name: str) -> Any:
-    """
-    Lazy attribute access. Accessing 'u' will construct a namespace from the
-    package's default registry on first use.
-    """
-    if name == "u":
-        return _get_default_registry().as_namespace()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-def __dir__() -> list[str]:
-    # Improve discoverability in REPL / autocomplete.
-    return sorted(list(globals().keys()) + ["u"])

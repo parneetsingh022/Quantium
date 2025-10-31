@@ -15,7 +15,7 @@ def u():
 
 
 def test_import_u_from_quantium(monkeypatch, reg):
-    """Ensure `from quantium import u` works and is bound to DEFAULT_REGISTRY."""
+    """Ensure `from quantium.units import u` works and is bound to DEFAULT_REGISTRY."""
     import importlib
     import quantium.units.registry as regmod
 
@@ -26,7 +26,7 @@ def test_import_u_from_quantium(monkeypatch, reg):
     importlib.reload(quantium)  # rebinds u to the patched registry
 
     # Verify `u` is importable directly
-    from quantium import u
+    from quantium.units import u
     assert hasattr(u, "_reg")
     assert u._reg is reg  # should wrap the patched registry
 
@@ -139,7 +139,7 @@ def test_top_level_u_uses_default_registry(monkeypatch, reg):
     import importlib, quantium
     importlib.reload(quantium)
 
-    from quantium import u
+    from quantium.units import u
     assert u.m is reg.get("m")
     assert u("cm").dim == reg.get("cm").dim
 
