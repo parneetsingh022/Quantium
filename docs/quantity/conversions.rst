@@ -5,7 +5,7 @@ You can convert any ``Quantity`` to another compatible unit using the ``.to()`` 
 
 .. code-block:: python
 
-   from quantium import u
+   from quantium.units import u
 
    speed_ms = 10 * u.m / u.s
    print(speed_ms)  # 10 m/s

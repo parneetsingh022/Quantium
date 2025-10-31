@@ -11,7 +11,7 @@ Quantium lets you define your own units when needed for domain-specific or even 
 
 .. code-block:: python
 
-    from quantium import u
+    from quantium.units import u
 
     # Define a new unit based on its SI equivalent
     u.define("furlong_per_fortnight", 0.0001663 , u.m / u.s)

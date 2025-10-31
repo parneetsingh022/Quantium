@@ -7,7 +7,7 @@ implementation. By default quantities print in their current unit. Use the
 
 .. code-block:: python
 
-   from quantium import u
+   from quantium.units import u
 
    v = 1000 * (u.cm / u.s)
 

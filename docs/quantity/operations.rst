@@ -12,7 +12,7 @@ When two compatible quantities are added or subtracted, the result keeps the uni
 
 .. code-block:: python
 
-   from quantium import u
+   from quantium.units import u
 
    total_dist = (1 * u.km) + (500 * u.m)
    print(total_dist)  # 1.5 km
