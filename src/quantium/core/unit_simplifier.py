@@ -16,6 +16,7 @@ from fractions import Fraction
 
 from quantium.core.dimensions import DIM_0, Dim, dim_pow
 from quantium.core.utils import _tokenize_name_merge
+from quantium.units.prefixes import Prefix
 
 if TYPE_CHECKING:  # pragma: no cover - import only used for typing
     from quantium.core.quantity import Unit
@@ -416,7 +417,7 @@ class UnitNameSimplifier:
             except ValueError:
                 return None
 
-        def _allowed_prefixes():
+        def _allowed_prefixes() -> list[Prefix]:
             from quantium.units.registry import PREFIXES
             return [p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS]
 
@@ -482,7 +483,7 @@ class UnitNameSimplifier:
         # Otherwise, it looks for a preferred base symbol and tests prefixed versions (e.g., Pa → kPa)
         # to find a more readable unit. Falls back to the original composite if no simplification works.
         # Example: for comp = "N·m" and dim = energy, returns (value_for_J, J) since 1 J = 1 N·m.
-        def _preferred_collapse_from_components(comp: "Unit", comps: SymbolComponents) -> tuple[float, "Unit"] | None:
+        def _preferred_collapse_from_components(comp: "Unit", comps: SymbolComponents) -> tuple[float, "Unit"]:
             from quantium.core.utils import preferred_symbol_for_dim
             match = self._match_preferred_power(dim)
             if match:
@@ -505,7 +506,7 @@ class UnitNameSimplifier:
         # was requested, it also checks for better prefixed forms (like "km" or "ms")
         # to make the value more readable.
         # Example: chosen="m", target_exp=1 → tries m, mm, km and picks the best (e.g., 5 km instead of 5000 m)
-        def _single_axis_path(target_exp: int, chosen: "Unit" | None) -> tuple[float, "Unit"] | None:
+        def _single_axis_path(target_exp: int | Fraction, chosen: "Unit" | None) -> tuple[float, "Unit"] | None:
             if chosen is None:
                 return None
             final_unit = chosen ** target_exp
@@ -557,7 +558,8 @@ class UnitNameSimplifier:
             # 3c) Composite fallback + preferred symbol/prefix pass
             composite = self._unit_from_components(components)
             if composite is not None and composite.dim == dim:
-                return _preferred_collapse_from_components(composite, components)
+                result = _preferred_collapse_from_components(composite, components)
+                return result or (_value_for(composite), composite)
 
         # 4) Final fallback: canonical unit for the dimension
         unit = self.canonical_unit_for_dim(dim)
