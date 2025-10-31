@@ -1,9 +1,10 @@
-from quantium.units.registry import UnitsRegistry
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:  # pragma: no cover - typing aid only
+    from quantium.units.registry import UnitsRegistry
 # Lazy access helpers -------------------------------------------------------
 
-def _get_default_registry() -> UnitsRegistry:
+def _get_default_registry() -> "UnitsRegistry":
     # Import here to avoid import-time side-effects / circular imports.
     from quantium.units.registry import DEFAULT_REGISTRY  # local import
     return DEFAULT_REGISTRY
