@@ -29,7 +29,7 @@ from fractions import Fraction
 from quantium.core.utils import rationalize
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
-from quantium.core.unit_simplifier import SymbolComponents, UnitNameSimplifier
+from quantium.io.unit_simplifier import SymbolComponents, UnitNameSimplifier
 from quantium.catalog.parser import extract_unit_expr
 
 Number = Union[int, float]
