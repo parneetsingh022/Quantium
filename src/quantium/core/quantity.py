@@ -2,11 +2,11 @@
 quantium.core.quantity
 ======================
 
-Defines the `Unit` and `Quantity` classes for representing and manipulating
+Defines the `LinearUnit` and `Quantity` classes for representing and manipulating
 physical quantities with units and dimensions in a consistent, SI-based system.
 
 This module provides:
-- A `Unit` class for defining physical units (e.g., meter, second, kilogram)
+- A `LinearUnit` class for defining physical units (e.g., meter, second, kilogram)
   with their corresponding scaling factors to SI base units and dimensional
   representation.
 - A `Quantity` class for representing values with both magnitude and units,
@@ -26,7 +26,7 @@ from math import isclose
 from typing import Union
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
-from quantium.core.unit import UNIT_SIMPLIFIER, Unit
+from quantium.core.unit import UNIT_SIMPLIFIER, LinearUnit
 from quantium.io.unit_simplifier import SymbolComponents
 from quantium.units.parser import extract_unit_expr
 
@@ -44,13 +44,13 @@ class Quantity:
         The magnitude of the quantity expressed in SI base units.
     dim : dict or custom dimension object
         The physical dimension of the quantity (e.g., length, time, mass).
-    unit : Unit
+    unit : LinearUnit
         The unit in which the quantity is currently represented.
     """
     __slots__ = ["_mag_si", "dim", "unit"]
 
 
-    def __init__(self, value : float, unit : Unit):
+    def __init__(self, value : float, unit : LinearUnit):
         self._mag_si = float(value) * unit.scale_to_si
         self.dim = unit.dim
         self.unit = unit
@@ -165,15 +165,15 @@ class Quantity:
             
         return (self.dim, rounded_mag_si)
 
-    def to(self, new_unit: "Unit|str") -> Quantity:
+    def to(self, new_unit: "LinearUnit|str") -> Quantity:
         if(isinstance(new_unit, str)):
             from quantium.units.registry import DEFAULT_REGISTRY
             new_unit = extract_unit_expr(new_unit, DEFAULT_REGISTRY)
         
-        # This proves to mypy that new_unit is a Unit, not a str.
-        if not isinstance(new_unit, Unit):
+        # This proves to mypy that new_unit is a LinearUnit, not a str.
+        if not isinstance(new_unit, LinearUnit):
             raise TypeError(
-                "Internal error: unit expression did not resolve to a Unit object."
+                "Internal error: unit expression did not resolve to a LinearUnit object."
             )
 
         if new_unit.dim != self.dim:
@@ -221,18 +221,18 @@ class Quantity:
         # form ending with the head (e.g., "kBq"), keep that head as the SI symbol.
         for head in si_heads:
             if cur_name == head or cur_name.endswith(head):
-                si_unit = Unit(head, 1.0, self.dim)
+                si_unit = LinearUnit(head, 1.0, self.dim)
                 return Quantity(self._mag_si, si_unit)  # already SI magnitude
 
         # --- (2) Fall back to the global preferred symbol for this dimension ---
         sym = preferred_symbol_for_dim(self.dim)  # e.g., "A", "N", "W", "Pa", "Hz", …
         if sym:
-            si_unit = Unit(sym, 1.0, self.dim)
+            si_unit = LinearUnit(sym, 1.0, self.dim)
             return Quantity(self._mag_si, si_unit)
 
         # --- (3) Compose from base SI if no named symbol exists ---
         si_name = format_dim(self.dim)  # e.g., "kg·m/s²", "1/s", "m"
-        si_unit = Unit(si_name, 1.0, self.dim)
+        si_unit = LinearUnit(si_name, 1.0, self.dim)
         return Quantity(self._mag_si, si_unit)
 
     @property
@@ -255,13 +255,13 @@ class Quantity:
             raise TypeError("Sub requires same dimensions")
         return Quantity((self._mag_si - other._mag_si)/self.unit.scale_to_si, self.unit)
     
-    def __mul__(self, other: "Quantity | Unit | Number") -> "Quantity":
+    def __mul__(self, other: "Quantity | LinearUnit | Number") -> "Quantity":
         # scalar × quantity
         if isinstance(other, (int, float)):
             return Quantity((self._mag_si * float(other)) / self.unit.scale_to_si, self.unit)
 
         # quantity × unit
-        if isinstance(other, Unit):
+        if isinstance(other, LinearUnit):
             result_mag_si = self._mag_si * other.scale_to_si
             result_dim = dim_mul(self.dim, other.dim)
 
@@ -290,13 +290,13 @@ class Quantity:
         # allows 3 * (2 m) -> 6 m
         return self.__mul__(other)
 
-    def __truediv__(self, other: "Quantity | Unit | Number") -> "Quantity":
+    def __truediv__(self, other: "Quantity | LinearUnit | Number") -> "Quantity":
         # quantity / scalar
         if isinstance(other, (int, float)):
             return Quantity((self._mag_si / float(other)) / self.unit.scale_to_si, self.unit)
         
         # quantity / unit
-        if isinstance(other, Unit):
+        if isinstance(other, LinearUnit):
             result_mag_si = self._mag_si / other.scale_to_si
             result_dim = dim_div(self.dim, other.dim)
             components = UNIT_SIMPLIFIER.combine_symbol_maps(

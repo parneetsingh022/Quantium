@@ -16,7 +16,7 @@ Key improvements over the prior design
 
 Assumptions
 -----------
-- `Unit(name: str, scale_to_si: float, dim)` is available from `quantium.core.quantity`.
+- `LinearUnit(name: str, scale_to_si: float, dim)` is available from `quantium.core.quantity`.
 - Dimension arithmetic helpers are in `quantium.core.dimensions`.
 """
 from __future__ import annotations
@@ -41,7 +41,7 @@ from quantium.core.dimensions import (
     dim_mul,
     dim_pow,
 )
-from quantium.core.unit import Unit
+from quantium.core.unit import LinearUnit, LinearUnit
 from quantium.units.parser import extract_unit_expr
 
 
@@ -91,7 +91,7 @@ def normalize_symbol(s: str) -> str:
 # Units registry
 # ---------------------------------------------------------------------------
 class UnitsRegistry:
-    """Thread-safe registry for `Unit` objects with SI prefix synthesis.
+    """Thread-safe registry for `LinearUnit` objects with SI prefix synthesis.
 
     This registry does *not* parse compound expressions (like "m/s^2").
     It focuses on atomic symbols (possibly prefixed). That higher-level
@@ -100,7 +100,7 @@ class UnitsRegistry:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._units: Dict[str, Unit] = {}
+        self._units: Dict[str, LinearUnit] = {}
         self._aliases: Dict[str, str] = {}
         self._non_prefixable: set[str] = set()
 
@@ -121,8 +121,8 @@ class UnitsRegistry:
         return normalize_symbol(symbol) in self._non_prefixable
 
     # -------------------------- public API ---------------------------------
-    def register(self, unit: Unit, replace : bool = False) -> None:
-        """Register (or overwrite if replace is True) a `Unit` under its canonical name.
+    def register(self, unit: LinearUnit, replace : bool = False) -> None:
+        """Register (or overwrite if replace is True) a `LinearUnit` under its canonical name.
 
         Use `register_alias` to add additional spellings without duplication.
         """
@@ -212,7 +212,7 @@ class UnitsRegistry:
         except ValueError:
             return False
 
-    def get(self, symbol: str) -> Unit:
+    def get(self, symbol: str) -> LinearUnit:
         """Lookup a unit by symbol. If missing, try to synthesize via SI prefix.
 
         Raises `ValueError` if unknown.
@@ -239,7 +239,7 @@ class UnitsRegistry:
 
         raise ValueError(f"Unknown unit symbol: {symbol}")
 
-    def all(self) -> Mapping[str, Unit]:
+    def all(self) -> Mapping[str, LinearUnit]:
         with self._lock:
             return dict(self._units)
         
@@ -258,7 +258,7 @@ class UnitsRegistry:
         p, base = self._split_prefix(symbol)
         return p is not None and base in self._units
 
-    def _try_synthesize_prefixed(self, sym: str) -> Optional[Unit]:
+    def _try_synthesize_prefixed(self, sym: str) -> Optional[LinearUnit]:
         # Already registered due to race? (cheap check)
         if sym in self._units:
             return self._units[sym]
@@ -279,7 +279,7 @@ class UnitsRegistry:
             return None
 
         factor = _PREFIX_FACTORS[prefix]
-        new_unit = Unit(sym, base.scale_to_si * factor, base.dim)
+        new_unit = LinearUnit(sym, base.scale_to_si * factor, base.dim)
         self._units[sym] = new_unit
         return new_unit
     
@@ -293,19 +293,19 @@ class UnitNamespace:
     def __contains__(self, spec: str) -> bool:
         return self._reg.has(spec)
 
-    def define(self, expr : str, scale : "float|int", reference : "Unit", replace : bool = False) -> None:
+    def define(self, expr : str, scale : "float|int", reference : "LinearUnit", replace : bool = False) -> None:
         if expr in getattr(UnitNamespace, "_reserved_names", ()):
             raise ValueError(
                 f"Cannot define unit '{expr}': "
                 "name conflicts with UnitNamespace attribute/method."
             )
         
-        self._reg.register(Unit(expr, float(scale) * reference.scale_to_si , reference.dim), replace)
+        self._reg.register(LinearUnit(expr, float(scale) * reference.scale_to_si , reference.dim), replace)
 
-    def __call__(self, spec : "str") -> "Unit":
+    def __call__(self, spec : "str") -> "LinearUnit":
         return self._reg.get(spec)
     
-    def __getattr__(self, name: "str") -> "Unit":
+    def __getattr__(self, name: "str") -> "LinearUnit":
         try:
             return self._reg.get(name)
         except (KeyError, ValueError) as e:
@@ -341,19 +341,19 @@ def _bootstrap_default_registry() -> UnitsRegistry:
 
     # Base SI units
     base_units = (
-        Unit("m",   1.0, LENGTH),       # length
-        Unit("kg",  1.0, MASS),         # mass
-        Unit("s",   1.0, TIME),         # time
-        Unit("A",   1.0, CURRENT),      # electric current
-        Unit("K",   1.0, TEMPERATURE),  # temperature
-        Unit("mol", 1.0, AMOUNT),       # amount of substance
-        Unit("cd",  1.0, LUMINOUS),     # luminous intensity
+        LinearUnit("m",   1.0, LENGTH),       # length
+        LinearUnit("kg",  1.0, MASS),         # mass
+        LinearUnit("s",   1.0, TIME),         # time
+        LinearUnit("A",   1.0, CURRENT),      # electric current
+        LinearUnit("K",   1.0, TEMPERATURE),  # temperature
+        LinearUnit("mol", 1.0, AMOUNT),       # amount of substance
+        LinearUnit("cd",  1.0, LUMINOUS),     # luminous intensity
     )
 
     # Named, dimensionless
     derived_named = (
-        Unit("rad", 1.0, DIM_0),
-        Unit("sr",  1.0, DIM_0),
+        LinearUnit("rad", 1.0, DIM_0),
+        LinearUnit("sr",  1.0, DIM_0),
     )
 
     # --- Helpful composite dimensions (readable + reuse) ---
@@ -426,15 +426,15 @@ def _bootstrap_default_registry() -> UnitsRegistry:
     for u in derived_named:
         reg.register(u)
     for sym, scale, dim in derived_units:
-        reg.register(Unit(sym, scale, dim))
+        reg.register(LinearUnit(sym, scale, dim))
     for sym, scale, dim in time_units:
-        reg.register(Unit(sym, scale, dim))
+        reg.register(LinearUnit(sym, scale, dim))
 
 
     # Temperature Units
-    reg.register(Unit('Δ°C', 1, TEMPERATURE, is_delta=True))
-    reg.register(Unit('Δ°F', 5/9, TEMPERATURE, is_delta=True))
-    reg.register(Unit("Δ°R", 5/9, TEMPERATURE, is_delta=True))
+    reg.register(LinearUnit.delta('Δ°C', 1, TEMPERATURE))
+    reg.register(LinearUnit.delta('Δ°F', 5/9, TEMPERATURE))
+    reg.register(LinearUnit.delta("Δ°R", 5/9, TEMPERATURE))
 
     # Common aliases
     reg.register_alias("ohm", "Ω")

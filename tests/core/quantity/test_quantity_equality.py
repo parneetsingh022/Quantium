@@ -1,7 +1,8 @@
 import pytest
 
 from quantium.core.dimensions import LENGTH, TIME
-from quantium.core.quantity import Quantity, Unit
+from quantium.core.quantity import Quantity
+from quantium.core.unit import LinearUnit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
 from quantium.units import u
 
@@ -201,8 +202,8 @@ def test_quantity_equality_same_si_and_equivalent_units():
 def test_quantity_equality_same_si_magnitude_different_units():
     # 100 cm and 1 m have same SI magnitude (both represent 1.0 m in SI),
     # and __eq__ now compares normalized SI magnitudes and dimensions, not unit identity.
-    m  = Unit("m", 1.0, LENGTH)
-    cm = Unit("cm", 0.01, LENGTH)
+    m  = LinearUnit("m", 1.0, LENGTH)
+    cm = LinearUnit("cm", 0.01, LENGTH)
 
     q_cm = 100 * cm  # _mag_si = 1.0
     q_m  = 1 * m     # _mag_si = 1.0
@@ -213,7 +214,7 @@ def test_quantity_equality_same_si_magnitude_different_units():
 
 @pytest.mark.regression(reason="Quantities with different SI magnitudes must not be equal even if units match")
 def test_quantity_inequality_different_si_magnitude_same_unit():
-    m = Unit("m", 1.0, LENGTH)
+    m = LinearUnit("m", 1.0, LENGTH)
     q1 = 2 * m
     q2 = 3 * m
     assert q1 != q2
@@ -221,7 +222,7 @@ def test_quantity_inequality_different_si_magnitude_same_unit():
 
 @pytest.mark.regression(reason="Quantity __eq__ returns NotImplemented for incompatible types")
 def test_quantity_equality_with_incompatible_type_returns_notimplemented():
-    m = Unit("m", 1.0, LENGTH)
+    m = LinearUnit("m", 1.0, LENGTH)
     q = 1 * m
     assert Quantity.__eq__(q, "not-a-quantity") is NotImplemented
     assert (q == "not-a-quantity") is False
@@ -233,8 +234,8 @@ def test_quantity_equality_with_incompatible_type_returns_notimplemented():
 @pytest.mark.regression(reason="Quantity equality consistent when units simplify to same dim/scale")
 def test_quantity_equality_when_units_simplify_to_same_dim_and_scale():
     # Build two different-looking but equivalent units for velocity
-    m = Unit("m", 1.0, LENGTH)
-    s = Unit("s", 1.0, TIME)
+    m = LinearUnit("m", 1.0, LENGTH)
+    s = LinearUnit("s", 1.0, TIME)
     ms = m / s
 
     # Another velocity path: (m*s)/s^2 simplifies to m/s

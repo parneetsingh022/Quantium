@@ -1,6 +1,7 @@
 from __future__ import annotations
 from quantium.core.dimensions import LENGTH, MASS
-from quantium.core.quantity import Quantity, Unit
+from quantium.core.quantity import Quantity
+from quantium.core.unit import LinearUnit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
 from quantium.units import u
 import pytest

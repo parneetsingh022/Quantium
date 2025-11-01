@@ -1,16 +1,9 @@
-"""Core Unit model and helpers.
-
-This module isolates the `Unit` dataclass from `quantium.core.quantity`
-so other modules (such as the units registry) can depend on it without
-triggering circular imports during documentation builds.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
 from math import isclose, isfinite
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from quantium.core.dimensions import DIM_0, Dim, dim_div, dim_mul, dim_pow
 from quantium.core.utils import rationalize
@@ -20,23 +13,59 @@ if TYPE_CHECKING:  # pragma: no cover - imported only for type checking
     from quantium.core.quantity import Quantity
 
 
+
+
+
+@runtime_checkable
+class Unit(Protocol):
+    name: str
+    dim: Dim
+
+    # Is this unit linear (purely multiplicative) w.r.t. SI?
+    @property
+    def is_linear(self) -> bool: ...
+
+    # Is this a delta (difference) unit? (only meaningful for linear)
+    @property
+    def is_delta(self) -> bool: ...
+
+    # Absolute conversions (apply offset if present)
+    def to_base_abs(self, x: float) -> float: ...
+    def from_base_abs(self, x: float) -> float: ...
+
+    # Delta conversions (no offset)
+    def to_base_delta(self, dx: float) -> float: ...
+    def from_base_delta(self, dx: float) -> float: ...
+
+
+
 @dataclass(frozen=True, slots=True)
-class Unit:
+class LinearUnit(Unit):
     """Representation of a physical unit with dimensional metadata."""
 
     name: str
     scale_to_si: float
     dim: Dim
-    is_delta : bool = False
+    _is_delta : bool = False
 
     def __post_init__(self) -> None:
         if len(self.dim) != 7:
             raise ValueError("dim must be a 7-tuple (L,M,T,I,Θ,N,J)")
         if not (self.scale_to_si > 0 and isfinite(self.scale_to_si)):
             raise ValueError("scale_to_si must be a positive, finite number")
+    
+    @classmethod
+    def delta(cls, name: str, scale_to_si: float, dim: Dim) -> LinearUnit:
+        """Factory for delta (difference) units."""
+        return cls(name, scale_to_si, dim, _is_delta=True)
+
+    @property
+    def is_linear(self) -> bool:
+        return True
+    
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Unit):
+        if not isinstance(other, LinearUnit):
             return NotImplemented
         return (
             self.dim == other.dim
@@ -54,7 +83,7 @@ class Unit:
             return Quantity(val, unit)
         return Quantity(scalar, self)
 
-    def __mul__(self, other: "Unit") -> "Unit":
+    def __mul__(self, other: "LinearUnit") -> "LinearUnit":
         new_dim = dim_mul(self.dim, other.dim)
         new_scale = self.scale_to_si * other.scale_to_si
 
@@ -64,7 +93,7 @@ class Unit:
         ):
             base_name = self.name if self.name else other.name
             new_unit_name = UNIT_SIMPLIFIER.normalize_power_name(f"{base_name}^2")
-            return Unit(new_unit_name, new_scale, new_dim)
+            return LinearUnit(new_unit_name, new_scale, new_dim)
 
         components = UNIT_SIMPLIFIER.combine_symbol_maps(
             UNIT_SIMPLIFIER.unit_symbol_map(self, 0),
@@ -80,14 +109,14 @@ class Unit:
 
             preferred = preferred_symbol_for_dim(new_dim)
             if preferred:
-                return Unit(preferred, 1.0, new_dim)
+                return LinearUnit(preferred, 1.0, new_dim)
 
         new_unit_name = UNIT_SIMPLIFIER.format_unit_components(components)
         if new_dim == DIM_0:
             new_unit_name = ""
-        return Unit(new_unit_name, new_scale, new_dim)
+        return LinearUnit(new_unit_name, new_scale, new_dim)
 
-    def __truediv__(self, other: "Unit") -> "Unit":
+    def __truediv__(self, other: "LinearUnit") -> "LinearUnit":
         new_dim = dim_div(self.dim, other.dim)
         new_scale = self.scale_to_si / other.scale_to_si
 
@@ -105,15 +134,15 @@ class Unit:
 
             preferred = preferred_symbol_for_dim(new_dim)
             if preferred:
-                return Unit(preferred, 1.0, new_dim)
+                return LinearUnit(preferred, 1.0, new_dim)
 
         new_unit_name = UNIT_SIMPLIFIER.format_unit_components(components)
         if new_dim == DIM_0:
             new_unit_name = ""
 
-        return Unit(new_unit_name, new_scale, new_dim)
+        return LinearUnit(new_unit_name, new_scale, new_dim)
 
-    def __rtruediv__(self, n: int | float) -> "Unit":
+    def __rtruediv__(self, n: int | float) -> "LinearUnit":
         if n != 1:
             raise TypeError(
                 f"Invalid operation: cannot divide {n} by a Unit ({self.name}). "
@@ -126,9 +155,9 @@ class Unit:
         new_name = UNIT_SIMPLIFIER.format_unit_components(components)
         if new_dim == DIM_0:
             new_name = ""
-        return Unit(new_name, new_scale, new_dim)
+        return LinearUnit(new_name, new_scale, new_dim)
 
-    def __pow__(self, n: int | float | Fraction) -> "Unit":
+    def __pow__(self, n: int | float | Fraction) -> "LinearUnit":
         if isinstance(n, float):
             n = rationalize(n)
 
@@ -142,9 +171,9 @@ class Unit:
                 normalized_name = ""
 
         new_scale = self.scale_to_si ** n
-        return Unit(normalized_name, new_scale, new_dim)
+        return LinearUnit(normalized_name, new_scale, new_dim)
 
 
-UNIT_SIMPLIFIER = UnitNameSimplifier(Unit)
+UNIT_SIMPLIFIER = UnitNameSimplifier(LinearUnit)
 
 __all__ = ["Unit", "UNIT_SIMPLIFIER"]

@@ -1,7 +1,8 @@
 import math
 import pytest
 from quantium.core.dimensions import LENGTH, TEMPERATURE,TIME, DIM_0
-from quantium.core.quantity import Quantity, Unit
+from quantium.core.quantity import Quantity
+from quantium.core.unit import LinearUnit
 from quantium.units.registry import DEFAULT_REGISTRY as dreg
 from quantium.units import u
 # -------------------------------
@@ -9,8 +10,8 @@ from quantium.units import u
 # -------------------------------
 
 def test_quantity_construct_and_to():
-    m  = Unit("m", 1.0, LENGTH)
-    cm = Unit("cm", 0.01, LENGTH)
+    m  = LinearUnit("m", 1.0, LENGTH)
+    cm = LinearUnit("cm", 0.01, LENGTH)
 
     q_cm = Quantity(200, cm)          # 200 cm
     q_m  = q_cm.to(m)                  # -> 2 m
@@ -24,19 +25,19 @@ def test_quantity_construct_and_to():
     assert math.isclose(q_m._mag_si / q_m.unit.scale_to_si, 2.0)
 
 def test_quantity_to_dimension_mismatch_raises():
-    m = Unit("m", 1.0, LENGTH)
-    s = Unit("s", 1.0, TEMPERATURE)
+    m = LinearUnit("m", 1.0, LENGTH)
+    s = LinearUnit("s", 1.0, TEMPERATURE)
     q = Quantity(3, m)
     with pytest.raises(TypeError):
         q.to(s)
 
 
 # -------------------------------
-# __rmatmul__: value * Unit
+# __rmatmul__: value * LinearUnit
 # -------------------------------
 
 def test_rmatmul_operator():
-    m = Unit("m", 1.0, LENGTH)
+    m = LinearUnit("m", 1.0, LENGTH)
     q = 3 * m
     assert isinstance(q, Quantity)
     assert q.dim == LENGTH
@@ -140,7 +141,7 @@ def test_to_physically_equivalent_different_name():
     """
     q1 = Quantity(5.0, u.W/(u.A*u.m))  # 5.0 W/(A·m)
 
-    # Test conversion using a Unit object
+    # Test conversion using a LinearUnit object
     q2 = q1.to(u.V/u.m)            # Convert to V/m
 
     # 1. Check physical equivalence (value is the same)
@@ -170,7 +171,7 @@ def test_to_identical_name_optimization():
     """
     q1 = Quantity(10.0, u.V/u.m)  # 10.0 V/m
 
-    # Test conversion using the *same* Unit object
+    # Test conversion using the *same* LinearUnit object
     q2 = q1.to(u.V/u.m)
 
     # Check that it returned the *exact same object*

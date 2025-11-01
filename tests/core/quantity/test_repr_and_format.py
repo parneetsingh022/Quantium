@@ -2,7 +2,7 @@ from math import isclose
 import pytest
 
 from quantium.core.dimensions import LENGTH, MASS, TIME
-from quantium.core.quantity import Unit
+from quantium.core.unit import LinearUnit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
 import quantium.core.utils as utils
 from quantium.units import u
@@ -28,7 +28,7 @@ def test_repr_keeps_non_si_unit_name(monkeypatch):
     # Ensure it would *try* to upgrade only when scale_to_si == 1.0; here it's 0.01, so no upgrade.
     monkeypatch.setattr(utils, "preferred_symbol_for_dim", lambda d: "m", raising=True)
 
-    cm = Unit("cm", 0.01, LENGTH)
+    cm = LinearUnit("cm", 0.01, LENGTH)
     q = 2 * cm
     assert repr(q) == "2 cm"
 
@@ -41,7 +41,7 @@ def test_repr_upgrades_to_preferred_symbol_when_scale_is_1(monkeypatch):
     # preferred symbol for LENGTH is "m"
     monkeypatch.setattr(_core.utils, "preferred_symbol_for_dim", lambda d: "m" if d == LENGTH else None, raising=True)
 
-    m = Unit("m", 1.0, LENGTH)
+    m = LinearUnit("m", 1.0, LENGTH)
     q = 3 * m
     # scale_to_si == 1.0 -> allowed to upgrade pretty name to "m"
     assert repr(q) == "3 m"
@@ -632,7 +632,7 @@ def test_repr_regression_fix_keeps_non_si_unit(monkeypatch):
     import quantium.core.utils as utils
     monkeypatch.setattr(utils, "preferred_symbol_for_dim", lambda d: "m", raising=True)
 
-    cm = Unit("cm", 0.01, LENGTH)
+    cm = LinearUnit("cm", 0.01, LENGTH)
     q = 2 * cm
 
     # The fix ensures this prints "2 cm", not "20 mm"

@@ -8,7 +8,7 @@ from typing import Tuple, Union, Optional
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from quantium.core.unit import Unit  # <-- Import Unit for type hints
+    from quantium.core.unit import LinearUnit  # <-- Import LinearUnit for type hints
     from quantium.units.registry import UnitsRegistry
 
 # --- Plan node types ------------------------------------------------
@@ -170,7 +170,7 @@ class _UnitExprParser:
         self.i += len(tok)
 
 # ---------------- Evaluation of a plan against a given registry ----------------
-def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit":  # <-- FIX: Added return type
+def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "LinearUnit":  # <-- FIX: Added return type
     kind, op1, op2 = plan
 
     if kind == "name":
@@ -182,9 +182,9 @@ def _eval_plan(plan: Plan, reg: "UnitsRegistry") -> "Unit":  # <-- FIX: Added re
             raise ValueError(f"Unknown unit '{op1}': {e}") from None
 
     elif kind == "one":
-        from quantium.core.unit import Unit
+        from quantium.core.unit import LinearUnit
         from quantium.core.dimensions import DIM_0
-        return Unit("1", 1.0, DIM_0)
+        return LinearUnit("1", 1.0, DIM_0)
 
     elif kind == "pow":
         if not isinstance(op1, tuple):
@@ -225,7 +225,7 @@ def _compile_unit_expr(expr: str) -> Plan:
         )
     return _UnitExprParser(expr).parse()
 
-def extract_unit_expr(expr: str, reg: "UnitsRegistry") -> "Unit":  # <-- FIX: Added return type
+def extract_unit_expr(expr: str, reg: "UnitsRegistry") -> "LinearUnit":  # <-- FIX: Added return type
     """
     Fast custom parser for unit expressions like 'kg*m/(nF**2 * s**2)'.
     """

@@ -2,7 +2,8 @@ from dataclasses import FrozenInstanceError
 import math
 
 from quantium.core.dimensions import LENGTH, TEMPERATURE, TIME, dim_div
-from quantium.core.quantity import Quantity, Unit
+from quantium.core.quantity import Quantity
+from quantium.core.unit import LinearUnit
 from quantium.units.registry import DEFAULT_REGISTRY as ureg
 
 # -------------------------------
@@ -21,7 +22,7 @@ def test_to_si_uses_preferred_symbol_when_available(monkeypatch):
     monkeypatch.setattr(utils, "preferred_symbol_for_dim", fake_preferred, raising=True)
     monkeypatch.setattr(utils, "format_dim", fake_format, raising=True)
 
-    cm = Unit("cm", 0.01, LENGTH)
+    cm = LinearUnit("cm", 0.01, LENGTH)
     q_si = (123 * cm).to_si()
 
     assert isinstance(q_si, Quantity)
@@ -41,8 +42,8 @@ def test_to_si_fallbacks_to_formatted_dim_when_no_symbol(monkeypatch):
     monkeypatch.setattr(utils, "preferred_symbol_for_dim", fake_preferred, raising=True)
     monkeypatch.setattr(utils, "format_dim", fake_format, raising=True)
 
-    m = Unit("m", 1.0, LENGTH)
-    s = Unit("s", 1.0, TEMPERATURE)
+    m = LinearUnit("m", 1.0, LENGTH)
+    s = LinearUnit("s", 1.0, TEMPERATURE)
     q = ((5 * m) / (2 * s)).to_si()
 
     assert q.unit.name == "m/s"          # composed SI name from format_dim

@@ -19,7 +19,7 @@ from quantium.core.utils import _tokenize_name_merge
 from quantium.units.prefixes import Prefix
 
 if TYPE_CHECKING:  # pragma: no cover - import only used for typing
-    from quantium.core.unit import Unit
+    from quantium.core.unit import LinearUnit
 
 SymbolComponents = Dict[str, Tuple[Fraction, Tuple[int, int]]]
 
@@ -37,7 +37,7 @@ def _dim_key(dim: Dim) -> tuple[int, ...]:
 class UnitNameSimplifier:
     """Encapsulates the heuristics for producing canonical unit names."""
 
-    def __init__(self, unit_cls: type["Unit"]) -> None:
+    def __init__(self, unit_cls: type["LinearUnit"]) -> None:
         self._unit_cls = unit_cls
 
     # ------------------------------------------------------------------
@@ -86,7 +86,7 @@ class UnitNameSimplifier:
                     return symbol, -power
         return None
 
-    def canonical_unit_for_dim(self, dim: Dim) -> "Unit":
+    def canonical_unit_for_dim(self, dim: Dim) -> "LinearUnit":
         """Return a canonical unit (scale 1) for the provided dimension."""
         unit_cls = self._unit_cls
         if dim == DIM_0:
@@ -112,7 +112,7 @@ class UnitNameSimplifier:
     # ------------------------------------------------------------------
     # Symbol component utilities
     # ------------------------------------------------------------------
-    def unit_symbol_map(self, unit: "Unit", priority: int = 0) -> SymbolComponents:
+    def unit_symbol_map(self, unit: "LinearUnit", priority: int = 0) -> SymbolComponents:
         """
         Create a mapping from unit symbols to their exponents and metadata.
 
@@ -123,20 +123,20 @@ class UnitNameSimplifier:
 
         Examples
         --------
-        >>> unit_symbol_map(Unit("kg*m^2/s^3"))
+        >>> unit_symbol_map(LinearUnit("kg*m^2/s^3"))
         {
             'kg': (Fraction(1, 1), (0, 0)),
             'm': (Fraction(2, 1), (0, 1)),
             's': (Fraction(-3, 1), (0, 2))
         }
 
-        >>> unit_symbol_map(Unit("N"), priority=1)
+        >>> unit_symbol_map(LinearUnit("N"), priority=1)
         {'N': (Fraction(1, 1), (1, 0))}
 
         Parameters
         ----------
-        unit : Unit
-            A `Unit` object whose `name` attribute contains the symbolic representation
+        unit : LinearUnit
+            A `LinearUnit` object whose `name` attribute contains the symbolic representation
             of the unit (e.g., `"kg*m^2/s^3"`).
         priority : int, optional
             A priority value that is stored alongside each symbol to indicate
@@ -199,7 +199,7 @@ class UnitNameSimplifier:
         --------
         >>> map1 = {'m': (Fraction(1), (0, 0)), 's': (Fraction(-2), (0, 1))}
         >>> map2 = {'s': (Fraction(2), (1, 0)), 'kg': (Fraction(1), (1, 1))}
-        >>> Unit.combine_symbol_maps(map1, map2)
+        >>> LinearUnit.combine_symbol_maps(map1, map2)
         {'m': (Fraction(1, 1), (0, 0)), 'kg': (Fraction(1, 1), (1, 1))}
 
         Parameters
@@ -288,13 +288,13 @@ class UnitNameSimplifier:
         components: SymbolComponents,
         axis_idx: int,
         target_exp: Fraction,
-    ) -> "Unit" | None:
+    ) -> "LinearUnit" | None:
         from quantium.units.registry import DEFAULT_REGISTRY
 
         target_sign = 1 if target_exp > 0 else -1
-        best: tuple[str, Fraction, "Unit"] | None = None
+        best: tuple[str, Fraction, "LinearUnit"] | None = None
         best_score: Fraction = Fraction(-1, 1)
-        fallback: tuple[str, Fraction, "Unit"] | None = None
+        fallback: tuple[str, Fraction, "LinearUnit"] | None = None
         fallback_score: Fraction = Fraction(-1, 1)
 
         ordered_items = sorted(components.items(), key=lambda item: item[1][1])
@@ -334,21 +334,21 @@ class UnitNameSimplifier:
         _, _, unit = chosen
         return unit
 
-    def _unit_from_components(self, components: SymbolComponents) -> "Unit" | None:
+    def _unit_from_components(self, components: SymbolComponents) -> "LinearUnit" | None:
         """Reconstruct a composite unit from component symbol exponents."""
         if not components:
             return None
 
         from quantium.units.registry import DEFAULT_REGISTRY
 
-        def _mul_units(units: List["Unit"]) -> "Unit" | None:
-            result: "Unit" | None = None
+        def _mul_units(units: List["LinearUnit"]) -> "LinearUnit" | None:
+            result: "LinearUnit" | None = None
             for u in units:
                 result = u if result is None else result * u
             return result
 
-        numer_parts: List["Unit"] = []
-        denom_parts: List["Unit"] = []
+        numer_parts: List["LinearUnit"] = []
+        denom_parts: List["LinearUnit"] = []
 
         for symbol, (exponent, _) in components.items():
             if exponent == 0:
@@ -385,8 +385,8 @@ class UnitNameSimplifier:
         mag_si: float,
         dim: Dim,
         components: SymbolComponents | None = None,
-        requested_unit: "Unit" | None = None,
-    ) -> tuple[float, "Unit"]:
+        requested_unit: "LinearUnit" | None = None,
+    ) -> tuple[float, "LinearUnit"]:
         """Convert an SI magnitude into a value/unit tuple using canonical units."""
         unit_cls = self._unit_cls
 
@@ -407,10 +407,10 @@ class UnitNameSimplifier:
 
         # Selects the candidate (value, unit) pair whose numeric value is most “human-friendly”
         # — i.e., within [1, 1000) and closest to 1 on a log scale, using _score_value() as the key.
-        def _best(candidates: list[tuple[float, "Unit"]]) -> tuple[float, "Unit"]:
+        def _best(candidates: list[tuple[float, "LinearUnit"]]) -> tuple[float, "LinearUnit"]:
             return min(candidates, key=lambda t: _score_value(t[0]))
 
-        def _registry_get(symbol: str) -> "Unit | None":
+        def _registry_get(symbol: str) -> "LinearUnit | None":
             from quantium.units.registry import DEFAULT_REGISTRY
             try:
                 return DEFAULT_REGISTRY.get(symbol)
@@ -421,7 +421,7 @@ class UnitNameSimplifier:
             from quantium.units.registry import PREFIXES
             return [p for p in PREFIXES if p.symbol in _ALLOWED_CANON_PREFIX_SYMBOLS]
 
-        def _value_for(unit: "Unit") -> float:
+        def _value_for(unit: "LinearUnit") -> float:
             return mag_si / unit.scale_to_si
 
         # Builds a list of (value, unit) pairs for a base symbol and its allowed metric prefixes
@@ -429,11 +429,11 @@ class UnitNameSimplifier:
         # instead — useful for denominator units like 1/s or 1/m.
         # Example: _prefixed_candidates_for_symbol("s", invert=True)
         #          -> [(value_for_1/s, 1/s), (value_for_1/ms, 1/ms), (value_for_1/ks, 1/ks)]
-        def _prefixed_candidates_for_symbol(sym: str, invert: bool = False) -> list[tuple[float, "Unit"]]:
+        def _prefixed_candidates_for_symbol(sym: str, invert: bool = False) -> list[tuple[float, "LinearUnit"]]:
             base = _registry_get(sym)
             if base is None or base.scale_to_si <= 0:
                 return []
-            cands: list[tuple[float, "Unit"]] = [(_value_for(base if not invert else (base ** -1)), base if not invert else (base ** -1))]
+            cands: list[tuple[float, "LinearUnit"]] = [(_value_for(base if not invert else (base ** -1)), base if not invert else (base ** -1))]
             for p in _allowed_prefixes():
                 u = _registry_get(f"{p.symbol}{sym}")
                 if u is None:
@@ -449,9 +449,9 @@ class UnitNameSimplifier:
         # Example: ordered = [("cm", Fraction(1), (0,0)), ("m", Fraction(1), (0,1))]  # both length
         #         -> total_exp = 2; base = "cm" (earlier in order); canonical = (cm)^2;
         #            if target dim is L^2, returns (value_for_cm2, cm^2); otherwise None.
-        def _collapse_same_dim_components(ordered: list[tuple[str, Fraction, tuple[int, int]]]) -> tuple[float, "Unit"] | None:
+        def _collapse_same_dim_components(ordered: list[tuple[str, Fraction, tuple[int, int]]]) -> tuple[float, "LinearUnit"] | None:
             # ordered: [(symbol, exponent, order)]
-            component_candidates: list[tuple[str, Fraction, "Unit", tuple[int, int]]] = []
+            component_candidates: list[tuple[str, Fraction, "LinearUnit", tuple[int, int]]] = []
             total_exp = Fraction(0, 1)
             reference_dim: Dim | None = None
             for sym, exp, ordt in ordered:
@@ -468,7 +468,7 @@ class UnitNameSimplifier:
             if not component_candidates or total_exp == 0:
                 return None
 
-            def _pick_key(entry: tuple[str, Fraction, "Unit", tuple[int, int]]) -> tuple[Fraction, int, int]:
+            def _pick_key(entry: tuple[str, Fraction, "LinearUnit", tuple[int, int]]) -> tuple[Fraction, int, int]:
                 _, exp, _, ordt = entry
                 return (abs(exp), -ordt[0], -ordt[1])
 
@@ -483,7 +483,7 @@ class UnitNameSimplifier:
         # Otherwise, it looks for a preferred base symbol and tests prefixed versions (e.g., Pa → kPa)
         # to find a more readable unit. Falls back to the original composite if no simplification works.
         # Example: for comp = "N·m" and dim = energy, returns (value_for_J, J) since 1 J = 1 N·m.
-        def _preferred_collapse_from_components(comp: "Unit", comps: SymbolComponents) -> tuple[float, "Unit"]:
+        def _preferred_collapse_from_components(comp: "LinearUnit", comps: SymbolComponents) -> tuple[float, "LinearUnit"]:
             from quantium.core.utils import preferred_symbol_for_dim
             match = self._match_preferred_power(dim)
             if match:
@@ -506,7 +506,7 @@ class UnitNameSimplifier:
         # was requested, it also checks for better prefixed forms (like "km" or "ms")
         # to make the value more readable.
         # Example: chosen="m", target_exp=1 → tries m, mm, km and picks the best (e.g., 5 km instead of 5000 m)
-        def _single_axis_path(target_exp: int | Fraction, chosen: "Unit" | None) -> tuple[float, "Unit"] | None:
+        def _single_axis_path(target_exp: int | Fraction, chosen: "LinearUnit" | None) -> tuple[float, "LinearUnit"] | None:
             if chosen is None:
                 return None
             final_unit = chosen ** target_exp
