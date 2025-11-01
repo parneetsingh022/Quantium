@@ -27,6 +27,7 @@ class Unit:
     name: str
     scale_to_si: float
     dim: Dim
+    is_delta : bool = False
 
     def __post_init__(self) -> None:
         if len(self.dim) != 7:

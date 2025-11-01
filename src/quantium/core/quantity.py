@@ -215,7 +215,7 @@ class Quantity:
         # --- (1) Preserve the "family" if we can (Hz vs Bq, Gy vs Sv, …) ---
         # Grab all atomic SI heads (scale==1, same dim) registered in the system.
         si_heads = [name for name, u in _ureg.all().items()
-                    if u.scale_to_si == 1.0 and u.dim == self.dim]
+                    if u.scale_to_si == 1.0 and u.dim == self.dim and not u.is_delta]
 
         # If our current unit is exactly one of those heads (e.g., "Bq"), or is a prefixed
         # form ending with the head (e.g., "kBq"), keep that head as the SI symbol.
